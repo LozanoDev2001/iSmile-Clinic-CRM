@@ -33,6 +33,7 @@ const nextConfig: NextConfig = {
   // clinic-scoped and may show medical data, which must not be cached across
   // users. Pages render dynamically; use explicit request-scoped caching only.
   poweredByHeader: false,
+  devIndicators: false,
   // Native / Node-only packages: load at runtime instead of bundling.
   serverExternalPackages: ["@node-rs/argon2", "mariadb"],
   // backend/ lives beside frontend/; both must be inside the build root.

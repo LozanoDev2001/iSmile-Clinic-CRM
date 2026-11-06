@@ -14,7 +14,7 @@ import type { DemoAccount } from "@backend/features/auth/demo-accounts.service";
 import { loginSchema } from "@backend/features/auth/login.schema";
 
 const inputClass =
-  "h-12 rounded-xl border-[#d5dfea] bg-white px-4 text-[15px] md:text-[15px] placeholder:text-[#8a9bb0] focus-visible:border-[#2f80ed] focus-visible:ring-[#2f80ed]/20";
+  "h-11 rounded-xl border-[#d5dfea] bg-white px-4 text-[15px] md:text-[15px] placeholder:text-[#8a9bb0] focus-visible:border-[#2f80ed] focus-visible:ring-[#2f80ed]/20";
 
 interface LoginFormProps {
   callbackUrl?: string;
@@ -95,7 +95,7 @@ export function LoginForm({ callbackUrl, demo }: LoginFormProps) {
           <SubmitButton
             pending={isPending}
             pendingLabel="Signing in…"
-            className="mt-1 h-12 w-full rounded-xl bg-gradient-to-r from-[#2f86f0] to-[#0b4fb3] text-base font-semibold text-white shadow-[0_12px_24px_-10px_rgba(18,90,200,0.7)] transition-[filter] hover:brightness-110"
+            className="h-11 w-full rounded-xl bg-gradient-to-r from-[#267de9] to-[#0955ba] text-base font-semibold text-white shadow-[0_12px_24px_-10px_rgba(18,90,200,0.7)] transition-[filter] hover:brightness-110"
           >
             Sign in
             <ArrowRight data-icon="inline-end" className="size-4" />
@@ -103,7 +103,7 @@ export function LoginForm({ callbackUrl, demo }: LoginFormProps) {
         </FieldGroup>
       </form>
 
-      <div className="my-5 flex items-center gap-4 text-sm text-[#6b7f97]" aria-hidden>
+      <div className="my-4 flex items-center gap-4 text-sm text-[#6b7f97]" aria-hidden>
         <span className="h-px flex-1 bg-[#d5dfea]" />
         or
         <span className="h-px flex-1 bg-[#d5dfea]" />
@@ -113,14 +113,14 @@ export function LoginForm({ callbackUrl, demo }: LoginFormProps) {
         type="button"
         variant="outline"
         onClick={() => toast.info("SMS sign-in is coming soon. Please use your email and password for now.")}
-        className="h-12 w-full rounded-xl border-[#1f5fbf] bg-transparent text-[15px] font-medium text-[#1f5fbf] hover:bg-[#1f6fd1]/5 hover:text-[#1f5fbf]"
+        className="h-11 w-full rounded-xl border-[#1f5fbf] bg-transparent text-[15px] font-medium text-[#1f5fbf] hover:bg-[#1f6fd1]/5 hover:text-[#1f5fbf]"
       >
         <Smartphone data-icon="inline-start" className="size-4" />
         Sign in with SMS
       </Button>
 
       {demo ? (
-        <div className="mt-6 border-t border-[#d5dfea] pt-4">
+        <div className="mt-5 border-t border-[#d5dfea] pt-3">
           <button
             type="button"
             onClick={() => setDemoOpen((v) => !v)}
