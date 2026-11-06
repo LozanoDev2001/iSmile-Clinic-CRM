@@ -1,0 +1,45 @@
+{
+  "name": "@ismile/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iSmile CRM backend: controllers, services, repositories, types, auth, database",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.2.2",
+    "@prisma/adapter-mariadb": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "next-auth": "5.0.0-beta.32",
+    "nodemailer": "^8.0.11",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "next": "16.4.5",
+    "react": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
+    "@vitest/coverage-v8": "^4.1.12",
+    "dotenv": "^18.0.9",
+    "next": "16.4.5",
+    "prisma": "^7.10.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^4.1.12"
+  }
+}

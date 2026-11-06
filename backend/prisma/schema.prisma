@@ -1,0 +1,177 @@
+// iSmile Clinic CRM — Prisma schema (MySQL)
+// Run `npm run db:generate` after every change.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─── Organisation ────────────────────────────────────────────────────────────
+
+model Clinic {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+  patients Patient[]
+
+  @@map("clinics")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String   @db.VarChar(200)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic   Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  users    UserBranch[]
+  patients Patient[]
+
+  @@index([clinicId])
+  @@map("branches")
+}
+
+// ─── Identity & access ───────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  CLINIC_ADMIN
+  DENTIST
+  RECEPTIONIST
+  FINANCE_STAFF
+  CRM_STAFF
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique @db.VarChar(254)
+  name         String  @db.VarChar(120)
+  /// Argon2id hash. NULL until an invited user sets their password.
+  passwordHash String? @db.VarChar(255)
+  role         Role
+  /// NULL only for SUPER_ADMIN (system-wide).
+  clinicId     String?
+  isActive     Boolean @default(true)
+  /// Incremented to revoke every issued session (logout everywhere, password
+  /// change/reset, deactivation, role change). Stored in the JWT and compared
+  /// against this value on every authenticated server request.
+  sessionVersion    Int       @default(0)
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  clinic           Clinic?              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  branches         UserBranch[]
+  passwordTokens   PasswordResetToken[]
+  assignedPatients Patient[]            @relation("PrimaryDentist")
+
+  @@index([clinicId])
+  @@map("users")
+}
+
+/// Branches a (non clinic-wide) user may access.
+model UserBranch {
+  userId   String
+  branchId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+  @@index([branchId])
+  @@map("user_branches")
+}
+
+enum PasswordTokenPurpose {
+  RESET
+  INVITE
+}
+
+/// Single-use, time-limited token. Only the SHA-256 hash is stored.
+model PasswordResetToken {
+  id        String               @id @default(cuid())
+  userId    String
+  tokenHash String               @unique @db.Char(64)
+  purpose   PasswordTokenPurpose @default(RESET)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── Clinical (minimal — extended by the patients module) ────────────────────
+
+model Patient {
+  id               String    @id @default(cuid())
+  clinicId         String
+  branchId         String
+  firstName        String    @db.VarChar(100)
+  lastName         String    @db.VarChar(100)
+  dateOfBirth      DateTime? @db.Date
+  phone            String?   @db.VarChar(32)
+  email            String?   @db.VarChar(254)
+  /// Sensitive — returned only with `patients.medical.read`.
+  medicalNotes     String?   @db.Text
+  /// Sensitive — returned only with `patients.medical.read`.
+  allergies        String?   @db.Text
+  primaryDentistId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  clinic         Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  branch         Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  primaryDentist User?  @relation("PrimaryDentist", fields: [primaryDentistId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, branchId])
+  @@index([clinicId, lastName, firstName])
+  @@index([primaryDentistId])
+  @@map("patients")
+}
+
+// ─── Infrastructure ──────────────────────────────────────────────────────────
+
+/// Append-only. The application never updates or deletes rows; see
+/// scripts/db/audit-log-immutability.sql to enforce this at the database level.
+model AuditLog {
+  id           BigInt   @id @default(autoincrement())
+  actorId      String?  @db.VarChar(32)
+  clinicId     String?  @db.VarChar(32)
+  action       String   @db.VarChar(100)
+  resourceType String   @db.VarChar(50)
+  resourceId   String?  @db.VarChar(64)
+  metadata     Json?
+  ipAddress    String?  @db.VarChar(45)
+  requestId    String?  @db.VarChar(64)
+  createdAt    DateTime @default(now())
+
+  @@index([clinicId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
+
+/// Fixed-window rate-limit counters (no Redis required).
+model RateLimit {
+  id      String   @id @db.VarChar(191)
+  count   Int
+  resetAt DateTime @db.DateTime(3)
+
+  @@index([resetAt])
+  @@map("rate_limits")
+}
