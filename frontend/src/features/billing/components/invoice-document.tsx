@@ -18,7 +18,7 @@ function Row({ label, value, strong }: { label: ReactNode; value: string; strong
 export function InvoiceDocument({ invoice: i, clinic }: { invoice: InvoiceDetail; clinic: ClinicProfile }) {
   const scPwd = i.discountType !== "none";
   return (
-    <article aria-label={`Sales invoice ${i.number}`} className="invoice-document flex flex-col gap-5 rounded-[24px] bg-white p-6 text-[#0E2A47] shadow-sm print:rounded-none print:p-0 print:shadow-none">
+    <article aria-label={`Sales invoice ${i.number}`} className="invoice-document print-area flex flex-col gap-5 rounded-[24px] bg-white p-6 text-[#0E2A47] shadow-sm print:rounded-none print:p-0 print:shadow-none">
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#E3E7ED] pb-4">
         <div className="flex flex-col gap-0.5">
           <span className="text-lg font-semibold">{clinic.name}</span>

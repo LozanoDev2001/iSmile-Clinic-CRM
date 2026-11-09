@@ -85,7 +85,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Reports",
     icon: ChartLine,
     permission: "reports.read",
-    comingSoon: "Monthly summaries, sales, dentist production and collections reports.",
   },
   { key: "settings", href: "/settings", label: "Settings", icon: Settings },
 ];

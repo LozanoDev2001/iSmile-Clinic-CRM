@@ -274,16 +274,16 @@
   box-shadow: 0 8px 18px rgba(14, 42, 71, 0.22);
 }
 
-/* Printing an invoice prints only the invoice, not the app around it. */
+/* Printing an invoice or report prints only that, not the app around it. */
 @media print {
-  body:has(.invoice-document) * {
+  body:has(.print-area) * {
     visibility: hidden;
   }
-  body:has(.invoice-document) .invoice-document,
-  body:has(.invoice-document) .invoice-document * {
+  body:has(.print-area) .print-area,
+  body:has(.print-area) .print-area * {
     visibility: visible;
   }
-  body:has(.invoice-document) .invoice-document {
+  body:has(.print-area) .print-area {
     position: absolute;
     inset: 0;
   }
