@@ -6,15 +6,40 @@ import type { MiaSettings, SlotOption } from "./crwdforce.types";
 export const DRAFT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["reply", "summary", "intent", "next_step", "slot_id", "handover", "handover_reason"],
+  required: [
+    "reply",
+    "summary",
+    "intent",
+    "next_step",
+    "slot_id",
+    "handover",
+    "handover_reason",
+  ],
   properties: {
-    reply: { type: "string", description: "The message to send the patient, in their language." },
-    summary: { type: "string", description: "One sentence for the front desk: who this is and what they want." },
+    reply: {
+      type: "string",
+      description: "The message to send the patient, in their language.",
+    },
+    summary: {
+      type: "string",
+      description:
+        "One sentence for the front desk: who this is and what they want.",
+    },
     intent: { type: "string", enum: [...MIA_INTENTS] },
     next_step: { type: "string", enum: [...MIA_NEXT_STEPS] },
-    slot_id: { type: "string", description: "The id of the open slot offered in the reply (e.g. S3), or an empty string." },
-    handover: { type: "boolean", description: "True when a person on the team must take over." },
-    handover_reason: { type: "string", description: "Why the team must take over, or an empty string." },
+    slot_id: {
+      type: "string",
+      description:
+        "The id of the open slot offered in the reply (e.g. S3), or an empty string.",
+    },
+    handover: {
+      type: "boolean",
+      description: "True when a person on the team must take over.",
+    },
+    handover_reason: {
+      type: "string",
+      description: "Why the team must take over, or an empty string.",
+    },
   },
 } as const;
 
@@ -29,21 +54,36 @@ export interface ClinicFacts {
   products: PriceItem[];
 }
 
-const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const peso = (n: number) =>
+  `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 function hoursText(profile: ClinicProfile) {
-  return profile.hours.map((h) => `${h.day}: ${h.closed ? "closed" : `${h.open}–${h.close}`}`).join("; ");
+  return profile.hours
+    .map((h) => `${h.day}: ${h.closed ? "closed" : `${h.open}–${h.close}`}`)
+    .join("; ");
 }
 
+const TONE_GUIDE: Record<MiaSettings["tone"], string> = {
+  friendly:
+    "cheerful, casual and upbeat, like a friendly neighbour, with the odd emoji",
+  warm: "warm, friendly and reassuring, like a kind front-desk staff member",
+  formal: "polite, professional and concise",
+};
+
 /** The stable part of the prompt: who Mia is, the rules, and the clinic's facts. Changes only when settings or prices change. */
-export function buildSystemPrompt(mia: MiaSettings, facts: ClinicFacts): string {
+export function buildSystemPrompt(
+  mia: MiaSettings,
+  facts: ClinicFacts,
+): string {
   const { profile } = facts;
-  const vat = profile.vatRegistered ? "Prices are before 12% VAT. Senior citizens and PWDs get 20% off and pay no VAT." : "Senior citizens and PWDs get 20% off.";
+  const vat = profile.vatRegistered
+    ? "Prices are before 12% VAT. Senior citizens and PWDs get 20% off and pay no VAT."
+    : "Senior citizens and PWDs get 20% off.";
   return [
-    `You are ${mia.name}, the receptionist for ${profile.name}, a dental clinic in the Philippines. You write replies to patients who message the clinic on chat apps. A staff member reads every reply before it is sent, so write it ready to send.`,
+    `You are ${mia.name}, ${mia.role ? `the ${mia.role.toLowerCase()}` : "the receptionist"} for ${profile.name}, a dental clinic in the Philippines. You write replies to patients who message the clinic on chat apps. A staff member reads every reply before it is sent, so write it ready to send.`,
     "",
     "How to write",
-    `- Tone: ${mia.tone === "warm" ? "warm, friendly and reassuring, like a kind front-desk staff member" : "polite, professional and concise"}. Short chat messages: two to five sentences, no headings or bullet lists unless listing a few options.`,
+    `- Tone: ${TONE_GUIDE[mia.tone]}. Short chat messages: two to five sentences, no headings or bullet lists unless listing a few options.`,
     `- Reply in the language the patient uses, as long as it is one of: ${mia.languages.join(", ")}. Otherwise reply in English.`,
     "- Use the patient's first name when you know it. Sign off as the clinic, not as an AI.",
     "",
@@ -66,10 +106,14 @@ export function buildSystemPrompt(mia: MiaSettings, facts: ClinicFacts): string 
     `- Phone: ${profile.phone || "not set yet"}`,
     `- Opening hours: ${hoursText(profile)}`,
     `- Dental services and prices: ${facts.services.map((s) => `${s.name} ${peso(s.price)}`).join("; ") || "not set yet"}`,
-    facts.products.length ? `- Products: ${facts.products.map((s) => `${s.name} ${peso(s.price)}`).join("; ")}` : "",
+    facts.products.length
+      ? `- Products: ${facts.products.map((s) => `${s.name} ${peso(s.price)}`).join("; ")}`
+      : "",
     `- ${vat} HMO members may be covered for some services; the team confirms coverage.`,
     `- Opening greeting for new chats: "${mia.greeting}"`,
-    mia.knowledge ? `\nMore from the clinic (approved answers)\n${mia.knowledge}` : "",
+    mia.knowledge
+      ? `\nMore from the clinic (approved answers)\n${mia.knowledge}`
+      : "",
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -87,16 +131,26 @@ export interface ConversationContext {
 
 /** The per-request part: today's date, who is writing, open slots and the conversation so far. */
 export function buildUserContent(c: ConversationContext): string {
-  const who = c.relationship === "patient" ? "an existing patient" : c.relationship === "lead" ? "a new enquiry already on our leads list" : "someone new";
+  const who =
+    c.relationship === "patient"
+      ? "an existing patient"
+      : c.relationship === "lead"
+        ? "a new enquiry already on our leads list"
+        : "someone new";
   return [
     `Now: ${c.now} (Philippine time). Channel: ${c.channel}.`,
     `They are ${who}, first name ${c.firstName}.${c.nextAppointment ? ` Their next visit: ${c.nextAppointment}.` : ""}`,
     "",
     "Open slots you may offer:",
-    c.slots.length ? c.slots.map((s) => `${s.id}: ${s.label}`).join("\n") : "None in the next few days — say the team will find a time.",
+    c.slots.length
+      ? c.slots.map((s) => `${s.id}: ${s.label}`).join("\n")
+      : "None in the next few days — say the team will find a time.",
     "",
     "Conversation so far (oldest first):",
-    ...c.transcript.map((m) => `[${m.at}] ${m.from === "patient" ? c.firstName : "Clinic"}: ${m.text}`),
+    ...c.transcript.map(
+      (m) =>
+        `[${m.at}] ${m.from === "patient" ? c.firstName : "Clinic"}: ${m.text}`,
+    ),
     "",
     "Write the clinic's next reply.",
   ].join("\n");

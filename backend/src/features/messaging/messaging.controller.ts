@@ -16,12 +16,20 @@ import {
   sendGreeting,
   setConversationStatus,
 } from "./messaging.service";
-import type { BroadcastInput, ConversationStatus, IncomingMessageInput, SavedReply } from "./messaging.types";
+import type {
+  BroadcastInput,
+  ConversationStatus,
+  IncomingMessageInput,
+  SavedReply,
+} from "./messaging.types";
 
 // New chats also create leads and contacts, which show elsewhere.
 const revalidate = () => revalidatePath("/", "layout");
 
-export async function replyAction(conversationId: string, body: string): Promise<ActionResult> {
+export async function replyAction(
+  conversationId: string,
+  body: string,
+): Promise<ActionResult> {
   return runAction(async () => {
     await reply(await requireAuth(), conversationId, { body });
     revalidate();
@@ -29,7 +37,9 @@ export async function replyAction(conversationId: string, body: string): Promise
   });
 }
 
-export async function markMessageSentAction(messageId: string): Promise<ActionResult> {
+export async function markMessageSentAction(
+  messageId: string,
+): Promise<ActionResult> {
   return runAction(async () => {
     await markMessageSent(await requireAuth(), messageId);
     revalidate();
@@ -37,23 +47,40 @@ export async function markMessageSentAction(messageId: string): Promise<ActionRe
   }, "Marked as sent.");
 }
 
-export async function assignConversationAction(conversationId: string, assigneeId: string | null): Promise<ActionResult> {
+export async function assignConversationAction(
+  conversationId: string,
+  assigneeId: string | null,
+): Promise<ActionResult> {
   return runAction(async () => {
-    await assignConversation(await requireAuth(), conversationId, { assigneeId });
+    await assignConversation(await requireAuth(), conversationId, {
+      assigneeId,
+    });
     revalidate();
     return undefined;
   }, "Conversation assigned.");
 }
 
-export async function setConversationStatusAction(conversationId: string, status: ConversationStatus): Promise<ActionResult<ConversationStatus>> {
-  return runAction(async () => {
-    const result = await setConversationStatus(await requireAuth(), conversationId, { status });
-    revalidate();
-    return result;
-  }, status === "done" ? "Marked as done." : "Reopened.");
+export async function setConversationStatusAction(
+  conversationId: string,
+  status: ConversationStatus,
+): Promise<ActionResult<ConversationStatus>> {
+  return runAction(
+    async () => {
+      const result = await setConversationStatus(
+        await requireAuth(),
+        conversationId,
+        { status },
+      );
+      revalidate();
+      return result;
+    },
+    status === "done" ? "Marked as done." : "Reopened.",
+  );
 }
 
-export async function logIncomingAction(input: IncomingMessageInput): Promise<ActionResult<{ conversationId: string; newLead: boolean }>> {
+export async function logIncomingAction(
+  input: IncomingMessageInput,
+): Promise<ActionResult<{ conversationId: string; newLead: boolean }>> {
   return runAction(async () => {
     const result = await receiveMessage(await requireAuth(), input, "staff");
     revalidate();
@@ -62,16 +89,25 @@ export async function logIncomingAction(input: IncomingMessageInput): Promise<Ac
 }
 
 /** Development only: pretends a message arrived from a chat app. */
-export async function simulateIncomingAction(input: IncomingMessageInput): Promise<ActionResult<{ conversationId: string; newLead: boolean }>> {
+export async function simulateIncomingAction(
+  input: IncomingMessageInput,
+): Promise<ActionResult<{ conversationId: string; newLead: boolean }>> {
   return runAction(async () => {
-    if (!isSimulatorOn()) throw Errors.forbidden("The simulator only runs in development.");
-    const result = await receiveMessage(await requireAuth(), input, "simulator");
+    if (!isSimulatorOn())
+      throw Errors.forbidden("The simulator only runs in development.");
+    const result = await receiveMessage(
+      await requireAuth(),
+      input,
+      "simulator",
+    );
     revalidate();
     return result;
   }, "Simulated message received.");
 }
 
-export async function saveSavedRepliesAction(replies: SavedReply[]): Promise<ActionResult<SavedReply[]>> {
+export async function saveSavedRepliesAction(
+  replies: SavedReply[],
+): Promise<ActionResult<SavedReply[]>> {
   return runAction(async () => {
     const saved = await saveSavedReplies(await requireAuth(), replies);
     revalidate();
@@ -79,7 +115,9 @@ export async function saveSavedRepliesAction(replies: SavedReply[]): Promise<Act
   }, "Saved replies updated.");
 }
 
-export async function saveGreetingAction(body: string): Promise<ActionResult<string>> {
+export async function saveGreetingAction(
+  body: string,
+): Promise<ActionResult<string>> {
   return runAction(async () => {
     const saved = await saveGreeting(await requireAuth(), { body });
     revalidate();
@@ -87,7 +125,9 @@ export async function saveGreetingAction(body: string): Promise<ActionResult<str
   }, "Greeting saved.");
 }
 
-export async function sendGreetingAction(patientId: string): Promise<ActionResult<{ conversationId: string }>> {
+export async function sendGreetingAction(
+  patientId: string,
+): Promise<ActionResult<{ conversationId: string }>> {
   return runAction(async () => {
     const result = await sendGreeting(await requireAuth(), patientId);
     revalidate();
@@ -95,7 +135,9 @@ export async function sendGreetingAction(patientId: string): Promise<ActionResul
   }, "Greeting sent.");
 }
 
-export async function sendBroadcastAction(input: BroadcastInput): Promise<ActionResult<{ id: string; recipients: number }>> {
+export async function sendBroadcastAction(
+  input: BroadcastInput,
+): Promise<ActionResult<{ id: string; recipients: number }>> {
   return runAction(async () => {
     const result = await sendBroadcast(await requireAuth(), input);
     revalidate();

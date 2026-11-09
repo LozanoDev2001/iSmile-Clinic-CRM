@@ -21,7 +21,7 @@ const SECTIONS: Section[] = [
   { title: "Integrations", description: "Chat apps, phone, payments" },
   { title: "Notifications", description: "Reminders patients receive" },
   { title: "Appearance", description: "Light or dark theme" },
-  { title: "crwdForce", description: "Mia’s persona, voice, handover rules", href: "/settings/crwdforce", mia: true },
+  { title: "crwdForce", description: "Mia’s persona, voice, handover rules", href: "/crwdforce/setup", mia: true },
 ];
 
 export function SettingsNav() {

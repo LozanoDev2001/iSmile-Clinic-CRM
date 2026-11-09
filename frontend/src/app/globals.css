@@ -229,6 +229,45 @@
   }
 }
 
+/* Scrollbars: thin rounded thumb, no track, as in the demo. Chromium/Safari use the pseudo-elements; Firefox uses scrollbar-color. */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgba(29, 82, 150, 0.28) padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(29, 82, 150, 0.5);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(29, 82, 150, 0.35) transparent;
+    }
+  }
+}
+
+/* For scroll areas on the blue rail and panels. */
+@utility scrollbar-dark {
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(158, 195, 238, 0.45);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(158, 195, 238, 0.75);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-color: #5088c4 transparent;
+  }
+}
+
 /* App shell glass theme, ported from iSmile-CRM-Offline-Demo-rev2.html. */
 @utility app-bg {
   background:

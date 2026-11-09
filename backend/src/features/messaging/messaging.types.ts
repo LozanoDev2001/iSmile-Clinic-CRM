@@ -1,6 +1,12 @@
 import type { z } from "zod";
 import type { NamedRef } from "@backend/features/patients/patients.types";
-import type { BROADCAST_AUDIENCES, CONVERSATION_STATUSES, DELIVERY_STATUSES, broadcastSchema, incomingMessageSchema } from "./messaging.schema";
+import type {
+  BROADCAST_AUDIENCES,
+  CONVERSATION_STATUSES,
+  DELIVERY_STATUSES,
+  broadcastSchema,
+  incomingMessageSchema,
+} from "./messaging.schema";
 import type { TemplateValues } from "./messaging.templates";
 
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
@@ -36,9 +42,21 @@ export interface ConversationDetail extends ConversationSummary {
   contactPhone: string | null;
   contactEmail: string | null;
   patient: { id: string; patientNo: string } | null;
-  openLead: { id: string; stage: string } | null;
+  openLead: {
+    id: string;
+    stage: string;
+    interest: { name: string; price: number } | null;
+  } | null;
+  /** Patients only: their last finished visit and next booked one. */
+  visits: { last: VisitRef | null; next: VisitRef | null };
   /** Values for {fill-ins} in saved replies. */
   fill: TemplateValues;
+}
+
+export interface VisitRef {
+  startsAt: Date;
+  dentist: string | null;
+  service: string | null;
 }
 
 export interface SavedReply {

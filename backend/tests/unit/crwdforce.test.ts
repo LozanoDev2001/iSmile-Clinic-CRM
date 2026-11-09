@@ -71,7 +71,8 @@ beforeEach(() => {
 describe("prompt", () => {
   it("states the rules, the clinic's facts and the allowed languages", () => {
     const system = buildSystemPrompt({ ...DEFAULT_MIA_SETTINGS, knowledge: "Braces start at ₱35,000.", handoverNotes: "Insurance letters" }, facts);
-    expect(system).toContain("You are Mia, the receptionist for iSmile Dental Home");
+    expect(system).toContain("You are Mia, the virtual front desk for iSmile Dental Home");
+    expect(system).toContain("warm, friendly and reassuring");
     expect(system).toContain("English, Filipino, Taglish");
     expect(system).toContain("Oral prophylaxis (cleaning) ₱1,300");
     expect(system).toContain("Sun: closed");
