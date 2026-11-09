@@ -158,6 +158,7 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
                   <Field label="Mobile" value={p.phone} />
                   <Field label="Email" value={p.email} />
                   <Field label="Preferred app for messages" value={labelOf(CHANNEL_LABELS, p.preferredChannel)} />
+                  <Field label="Clinic news and promos" value={p.marketingOptIn ? "Agreed" : "Not agreed"} />
                   <Field label="Attending dentist" value={p.primaryDentist?.name} />
                   <Field label="Home address" value={p.address} wide />
                 </dl>

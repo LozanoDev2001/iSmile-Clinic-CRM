@@ -15,6 +15,7 @@ export const contactInputSchema = z.object({
   email: z.union([z.email("Enter a valid email"), z.literal(""), z.null()]).transform((v) => v || null),
   preferredChannel: z.union([z.enum(MESSAGE_CHANNELS), z.literal(""), z.null()]).transform((v) => v || null),
   address: optionalText(255),
+  marketingOptIn: z.boolean().default(false),
 });
 
 export const newContactSchema = contactInputSchema.extend({ contactType: z.enum(NEW_CONTACT_TYPES) });

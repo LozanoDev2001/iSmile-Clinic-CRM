@@ -36,6 +36,8 @@ export const AUDIT_ACTIONS = {
   LEAD_CREATED: "lead.created",
   CONTACT_CREATED: "contact.created",
   CONTACT_UPDATED: "contact.updated",
+  MESSAGE_RECEIVED: "message.received",
+  BROADCAST_SENT: "broadcast.sent",
   LEAD_UPDATED: "lead.updated",
   PATIENT_UPDATED: "patient.updated",
   PATIENT_MEDICAL_VIEWED: "patient.medical.viewed",

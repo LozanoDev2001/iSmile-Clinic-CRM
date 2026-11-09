@@ -19,6 +19,7 @@ model Clinic {
   currency            String               @default("PHP") @db.Char(3)
   settings            Json
   createdAt           DateTime             @default(now()) @map("created_at")
+  broadcasts          Broadcast[]
   appointmentChairs   AppointmentChair[]
   appointments        Appointment[]
   approvalRequests    ApprovalRequest[]
@@ -86,6 +87,8 @@ model User {
   userPermissionOverrides          UserPermissionOverride[]
   userRoles                        UserRole[]
   clinic                           Clinic                   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "users_ibfk_1")
+
+  broadcasts Broadcast[]
 
   @@unique([clinicId, email], map: "clinic_id")
   @@unique([clinicId, staffCode], map: "clinic_id_2")
@@ -334,6 +337,8 @@ model Contact {
   phone            String?           @db.VarChar(255)
   preferredChannel String?           @map("preferred_channel") @db.VarChar(255)
   address          String?           @db.VarChar(255)
+  marketingOptIn   Boolean           @default(false) @map("marketing_opt_in")
+  marketingOptInAt DateTime?         @map("marketing_opt_in_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
   clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "contacts_ibfk_1")
@@ -347,21 +352,25 @@ model Contact {
 }
 
 model Conversation {
-  id           String    @id @default(uuid()) @db.Char(36)
-  clinicId     String    @map("clinic_id") @db.Char(36)
-  contactId    String    @map("contact_id") @db.Char(36)
-  channel      String    @db.VarChar(255)
-  assignedToId String?   @map("assigned_to") @db.Char(36)
-  status       String    @default("open") @db.VarChar(255)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  clinic       Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
-  contact      Contact   @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
-  assignedTo   User?     @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
-  messages     Message[]
+  id            String    @id @default(uuid()) @db.Char(36)
+  clinicId      String    @map("clinic_id") @db.Char(36)
+  contactId     String    @map("contact_id") @db.Char(36)
+  channel       String    @db.VarChar(255)
+  assignedToId  String?   @map("assigned_to") @db.Char(36)
+  status        String    @default("open") @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  externalRef   String?   @map("external_ref") @db.VarChar(191)
+  lastMessageAt DateTime? @map("last_message_at")
+  clinic        Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
+  contact       Contact   @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
+  assignedTo    User?     @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
+  messages      Message[]
 
+  @@unique([clinicId, channel, externalRef], map: "conversations_external_ref")
   @@index([assignedToId], map: "assigned_to")
   @@index([clinicId], map: "clinic_id")
   @@index([contactId], map: "contact_id")
+  @@index([clinicId, lastMessageAt], map: "conversations_inbox_idx")
   @@map("conversations")
 }
 
@@ -571,11 +580,15 @@ model Message {
   providerMessageId String?      @map("provider_message_id") @db.VarChar(255)
   sentAt            DateTime     @default(now()) @map("sent_at")
   deliveryStatus    String?      @map("delivery_status") @db.VarChar(255)
+  kind              String       @default("chat") @db.VarChar(20)
+  broadcastId       String?      @map("broadcast_id") @db.Char(36)
+  broadcast         Broadcast?   @relation(fields: [broadcastId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "messages_broadcast_fkey")
   conversation      Conversation @relation(fields: [conversationId], references: [id], onUpdate: Restrict, map: "messages_ibfk_1")
   senderUser        User?        @relation(fields: [senderUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "messages_ibfk_2")
 
   @@index([conversationId], map: "conversation_id")
   @@index([senderUserId], map: "sender_user_id")
+  @@index([broadcastId], map: "messages_broadcast_id")
   @@map("messages")
 }
 
@@ -833,4 +846,23 @@ model UserRole {
   @@id([userId, roleId])
   @@index([roleId], map: "role_id")
   @@map("user_roles")
+}
+
+/// A message sent to many patients at once; each recipient gets a message in their conversation.
+model Broadcast {
+  id             String    @id @default(uuid()) @db.Char(36)
+  clinicId       String    @map("clinic_id") @db.Char(36)
+  title          String    @db.VarChar(120)
+  body           String    @db.Text
+  audience       String    @db.VarChar(40)
+  recipientCount Int       @default(0) @map("recipient_count")
+  createdById    String?   @map("created_by") @db.Char(36)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "broadcasts_clinic_fkey")
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "broadcasts_created_by_fkey")
+  messages       Message[]
+
+  @@index([clinicId, createdAt], map: "broadcasts_clinic_created")
+  @@index([createdById], map: "broadcasts_created_by")
+  @@map("broadcasts")
 }

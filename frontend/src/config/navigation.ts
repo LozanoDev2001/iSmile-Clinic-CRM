@@ -64,7 +64,6 @@ export const NAV_MODULES: NavModule[] = [
     shortLabel: "Messages",
     icon: MessageSquare,
     permission: "messaging.read",
-    comingSoon: "One inbox for Facebook, Instagram, WhatsApp, Viber and more.",
   },
   {
     key: "calendar",

@@ -1,5 +1,5 @@
 import "server-only";
-import { addDays, clinicInstant, clinicToday } from "@backend/config/clinic";
+import { addDays, ageFrom, clinicInstant, clinicToday } from "@backend/config/clinic";
 import { appointmentIdSchema } from "@backend/features/appointments/appointment.schema";
 import { appointmentsRepository } from "@backend/features/appointments/appointments.repository";
 import { catalogRepository } from "@backend/features/catalog/catalog.repository";
@@ -38,14 +38,6 @@ async function isVatRegistered(clinicId: string, tx: TransactionClient = prisma)
   const clinic = await settingsRepository.findClinicSettings(clinicId, tx);
   if (!clinic) throw Errors.notFound("clinic");
   return clinicProfileFrom(clinic.name, clinic.settings).vatRegistered;
-}
-
-function ageFrom(dob: string | null): number | null {
-  if (!dob) return null;
-  const today = clinicToday();
-  const [by, bm, bd] = dob.split("-").map(Number);
-  const [ty, tm, td] = today.split("-").map(Number);
-  return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
 }
 
 /** A completed visit in the user's scope that hasn't been invoiced yet. */

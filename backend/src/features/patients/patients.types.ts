@@ -88,6 +88,7 @@ export interface PatientFile extends PatientSummary {
   occupation: string | null;
   address: string | null;
   preferredChannel: string | null;
+  marketingOptIn: boolean;
   primaryDentist: NamedRef | null;
   payer: NamedRef | null;
   hmoMemberNo: string | null;

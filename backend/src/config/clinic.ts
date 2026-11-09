@@ -42,3 +42,21 @@ export function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
+
+/** Whole years between a YYYY-MM-DD birth date and `today` (clinic-local). */
+export function ageFrom(dob: string | null, today = clinicToday()): number | null {
+  if (!dob) return null;
+  const [by, bm, bd] = dob.split("-").map(Number);
+  const [ty, tm, td] = today.split("-").map(Number);
+  return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
+}
+
+/** Days until the next birthday (0 = today), or null without a birth date. */
+export function daysToBirthday(dob: string | null, today = clinicToday()): number | null {
+  if (!dob) return null;
+  const t = new Date(`${today}T00:00:00Z`);
+  const [, bm, bd] = dob.split("-").map(Number);
+  let next = Date.UTC(t.getUTCFullYear(), bm - 1, bd);
+  if (next < t.getTime()) next = Date.UTC(t.getUTCFullYear() + 1, bm - 1, bd);
+  return Math.round((next - t.getTime()) / MS_PER_DAY);
+}

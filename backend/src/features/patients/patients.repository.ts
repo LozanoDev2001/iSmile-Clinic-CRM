@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@backend/generated/prisma/client";
 import type { RecordScope } from "@backend/lib/authorization";
+import { consentTimestamp } from "@backend/lib/consent";
 import { prisma, type TransactionClient } from "@backend/lib/prisma";
 import type { ListPatientsQuery, PatientClinicalData, PatientData, PatientFilter, PatientMedicalDetail, PatientSummary } from "./patients.types";
 
@@ -88,7 +89,7 @@ const fileSelect = (includeMedical: boolean, now: Date) =>
     medicalAlerts: includeMedical,
     medicalConditions: includeMedical,
     medications: includeMedical,
-    contact: { select: { fullName: true, phone: true, email: true, address: true, preferredChannel: true } },
+    contact: { select: { fullName: true, phone: true, email: true, address: true, preferredChannel: true, marketingOptIn: true } },
     primaryDentist: { select: { id: true, fullName: true } },
     payer: { select: { id: true, name: true } },
     patientGuardians: {
@@ -106,9 +107,9 @@ const fileSelect = (includeMedical: boolean, now: Date) =>
 
 /** Contact, patient and emergency-contact fields, split for the three tables they live in. */
 function splitData(data: PatientData) {
-  const { fullName, phone, email, address, preferredChannel, emergencyName, emergencyRelationship, emergencyPhone, dob, ...patient } = data;
+  const { fullName, phone, email, address, preferredChannel, marketingOptIn, emergencyName, emergencyRelationship, emergencyPhone, dob, ...patient } = data;
   return {
-    contact: { fullName, phone, email, address, preferredChannel },
+    contact: { fullName, phone, email, address, preferredChannel, marketingOptIn },
     patient: { ...patient, dob: fromDateString(dob) },
     emergency: emergencyName ? { fullName: emergencyName, phone: emergencyPhone, relationship: emergencyRelationship } : null,
   };
@@ -219,7 +220,7 @@ export const patientsRepository = {
 
   async create(clinicId: string, patientNo: string, data: PatientData, clinical: PatientClinicalData | null, tx: TransactionClient) {
     const { contact, patient, emergency } = splitData(data);
-    const { id: contactId } = await tx.contact.create({ data: { clinicId, contactType: "patient", ...contact }, select: { id: true } });
+    const { id: contactId } = await tx.contact.create({ data: { clinicId, contactType: "patient", ...contact, marketingOptInAt: consentTimestamp(false, contact.marketingOptIn) }, select: { id: true } });
     const created = await tx.patient.create({
       data: { clinicId, contactId, patientNo, ...patient, ...(clinical ? clinicalColumns(clinical) : {}) },
       select: { id: true },
@@ -230,7 +231,8 @@ export const patientsRepository = {
 
   async update(clinicId: string, ids: { id: string; contactId: string }, data: PatientData, clinical: PatientClinicalData | null, tx: TransactionClient) {
     const { contact, patient, emergency } = splitData(data);
-    await tx.contact.update({ where: { id: ids.contactId }, data: contact });
+    const before = await tx.contact.findUniqueOrThrow({ where: { id: ids.contactId }, select: { marketingOptIn: true } });
+    await tx.contact.update({ where: { id: ids.contactId }, data: { ...contact, marketingOptInAt: consentTimestamp(before.marketingOptIn, contact.marketingOptIn) } });
     await tx.patient.update({ where: { id: ids.id }, data: { ...patient, ...(clinical ? clinicalColumns(clinical) : {}) } });
     await replaceEmergencyContact(clinicId, ids.id, emergency, tx);
   },

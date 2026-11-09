@@ -99,6 +99,7 @@ export async function getPatientFile(user: AuthUser, rawId: unknown): Promise<Pa
     email: row.contact.email,
     address: row.contact.address,
     preferredChannel: row.contact.preferredChannel,
+    marketingOptIn: row.contact.marketingOptIn,
     dob: toDateString(row.dob),
     sex: row.sex,
     civilStatus: row.civilStatus,

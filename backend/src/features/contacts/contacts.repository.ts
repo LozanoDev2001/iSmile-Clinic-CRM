@@ -50,15 +50,17 @@ export const contactsRepository = {
       select: {
         ...summarySelect,
         address: true,
+        marketingOptIn: true,
         leads: { select: { id: true, status: true, stage: true, createdAt: true }, orderBy: { createdAt: "desc" } },
         patientGuardians: { select: { relationship: true, patient: { select: { id: true, patientNo: true, contact: { select: { fullName: true } } } } } },
       },
     });
     if (!row) return null;
-    const { address, leads, patientGuardians, ...summary } = row;
+    const { address, marketingOptIn, leads, patientGuardians, ...summary } = row;
     return {
       ...toSummary(summary),
       address,
+      marketingOptIn,
       patientId: summary.patient?.id ?? null,
       leads,
       guardianOf: patientGuardians.map((g) => ({ patientId: g.patient.id, name: g.patient.contact.fullName, patientNo: g.patient.patientNo, relationship: g.relationship })),

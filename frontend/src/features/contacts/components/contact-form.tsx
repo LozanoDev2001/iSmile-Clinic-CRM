@@ -22,6 +22,7 @@ export function ContactForm({ contact, canEdit }: { contact: ContactDetail | nul
     email: contact?.email ?? "",
     preferredChannel: (contact?.preferredChannel ?? "") as FormValues["preferredChannel"],
     address: contact?.address ?? "",
+    marketingOptIn: contact?.marketingOptIn ?? false,
     contactType: "partner",
   });
   const [error, setError] = useState("");
@@ -83,6 +84,10 @@ export function ContactForm({ contact, canEdit }: { contact: ContactDetail | nul
           <input value={form.address ?? ""} onChange={(e) => set({ address: e.target.value })} className={selectClass} />
         </label>
       </div>
+      <label className="flex items-center gap-2 text-sm text-[#46566B]">
+        <input type="checkbox" checked={form.marketingOptIn ?? false} onChange={(e) => set({ marketingOptIn: e.target.checked })} className="size-4 accent-[#1D5296]" />
+        Agrees to receive clinic news and promos
+      </label>
       {error ? (
         <p role="alert" className="rounded-xl bg-[#FDECEA] px-3 py-2 text-sm text-[#A1301F]">
           {error}

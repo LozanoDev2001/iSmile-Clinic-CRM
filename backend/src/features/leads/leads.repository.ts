@@ -102,20 +102,6 @@ export const leadsRepository = {
     return tx.leadSource.count({ where: { id, clinicId } });
   },
 
-  /** Active staff with their role grants and overrides, to work out who can handle leads. */
-  staffWithAccess(clinicId: string, tx: TransactionClient = prisma) {
-    return tx.user.findMany({
-      where: { clinicId, status: "active" },
-      orderBy: { fullName: "asc" },
-      select: {
-        id: true,
-        fullName: true,
-        userRoles: { take: 1, select: { role: { select: { code: true, rolePermissions: { select: { permission: { select: { resource: true, action: true } } } } } } } },
-        userPermissionOverrides: { select: { decision: true, permission: { select: { resource: true, action: true } } } },
-      },
-    });
-  },
-
   /** A contact in the clinic with this phone number (digits compared), for duplicate detection. */
   async contactByPhone(clinicId: string, digits: string, tx: TransactionClient) {
     const candidates = await tx.contact.findMany({

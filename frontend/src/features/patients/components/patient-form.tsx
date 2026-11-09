@@ -40,6 +40,7 @@ function valuesFrom(patient: PatientFile | null): FormValues {
     emergencyName: v(patient?.emergencyContact?.name),
     emergencyRelationship: v(patient?.emergencyContact?.relationship),
     emergencyPhone: v(patient?.emergencyContact?.phone),
+    marketingOptIn: patient?.marketingOptIn ?? false,
     allergies: v(patient?.clinical?.allergies),
     medicalConditions: v(patient?.clinical?.medicalConditions),
     medications: v(patient?.clinical?.medications),
@@ -156,6 +157,13 @@ export function PatientForm({ patient, options, lockDentist, canEditClinical }: 
           ))}
         </SelectField>
         <FormTextField form={form} name="address" label="Home address" placeholder="Street, barangay, city" autoComplete="off" className={inputClass} />
+        <label className="flex items-start gap-2 text-sm text-[#46566B] md:col-span-2">
+          <input type="checkbox" className="mt-0.5 size-4 accent-[#1D5296]" {...form.register("marketingOptIn")} />
+          <span>
+            Agrees to receive clinic news and promos on their preferred app
+            <span className="block text-xs text-[#5E6B7E]">Needed for broadcasts. Ask the patient first; reminders and replies don&apos;t need it.</span>
+          </span>
+        </label>
       </Section>
 
       <Section title="Coverage and emergency contact" description="For kids, add the parent or guardian as the emergency contact.">

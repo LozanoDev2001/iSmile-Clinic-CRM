@@ -18,6 +18,7 @@ export interface ContactSummary {
 
 export interface ContactDetail extends ContactSummary {
   address: string | null;
+  marketingOptIn: boolean;
   patientId: string | null;
   leads: { id: string; status: string; stage: string; createdAt: Date }[];
   guardianOf: { patientId: string; name: string; patientNo: string; relationship: string | null }[];

@@ -1,10 +1,9 @@
 import "server-only";
 import { CLINIC_TIME_ZONE, addDays, clinicInstant, clinicToday } from "@backend/config/clinic";
-import { effectiveAccess, grantKey, permissionsFor } from "@backend/config/access";
-import { isRole } from "@backend/config/permissions";
 import { bookInTransaction } from "@backend/features/appointments/appointments.service";
 import { catalogRepository } from "@backend/features/catalog/catalog.repository";
 import { patientsRepository } from "@backend/features/patients/patients.repository";
+import { staffWithPermission } from "@backend/features/users/staff.service";
 import { assertPermission, type AuthUser } from "@backend/lib/authorization";
 import { Errors } from "@backend/lib/errors/app-error";
 import { AUDIT_ACTIONS, audit } from "@backend/lib/logging/audit";
@@ -22,16 +21,7 @@ const PAST_GRACE_MS = HOUR_MS;
 const CALL_RESULT_TEXT = { no_answer: "no answer", busy: "line busy", switched_off: "phone switched off" } as const;
 
 /** Staff whose access lets them work leads (the people a lead can be assigned to). */
-async function leadStaff(clinicId: string, tx: TransactionClient = prisma) {
-  const rows = await leadsRepository.staffWithAccess(clinicId, tx);
-  return rows.flatMap((u) => {
-    const code = u.userRoles[0]?.role.code;
-    if (!code || !isRole(code)) return [];
-    const grants = u.userRoles[0].role.rolePermissions.map((rp) => grantKey(rp.permission.resource, rp.permission.action));
-    const overrides = u.userPermissionOverrides.map((o) => ({ grant: grantKey(o.permission.resource, o.permission.action), decision: o.decision === "deny" ? ("deny" as const) : ("allow" as const) }));
-    return permissionsFor(effectiveAccess(code, grants, overrides)).includes("leads.update") ? [{ id: u.id, name: u.fullName }] : [];
-  });
-}
+const leadStaff = (clinicId: string, tx?: TransactionClient) => staffWithPermission(clinicId, "leads.update", tx);
 
 async function assertAssignable(clinicId: string, assigneeId: string, tx: TransactionClient) {
   if (!(await leadStaff(clinicId, tx)).some((s) => s.id === assigneeId)) throw Errors.validation({ assigneeId: ["Choose someone from the team list"] });

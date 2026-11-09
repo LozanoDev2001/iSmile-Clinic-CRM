@@ -55,6 +55,7 @@ export const patientInputSchema = z
     emergencyName: optionalText(120),
     emergencyRelationship: optionalText(60),
     emergencyPhone: phone,
+    marketingOptIn: z.boolean().default(false),
   })
   .refine((v) => v.emergencyName || (!v.emergencyRelationship && !v.emergencyPhone), {
     message: "Enter the emergency contact's name",

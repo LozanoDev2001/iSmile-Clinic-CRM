@@ -6,7 +6,6 @@ import { CLINIC_A, makeUser, userIdFor } from "../helpers/fixtures";
 const mocks = vi.hoisted(() => ({
   leads: {
     findDetail: vi.fn(),
-    staffWithAccess: vi.fn(),
     sourceExists: vi.fn(),
     contactByPhone: vi.fn(),
     createContact: vi.fn(),
@@ -18,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   },
   catalog: { findActive: vi.fn() },
   patients: { maxPatientNumber: vi.fn() },
+  staff: { activeWithAccess: vi.fn() },
   book: vi.fn(),
   audit: vi.fn(),
   findPatientByContact: vi.fn(),
@@ -28,6 +28,7 @@ vi.mock("@backend/features/leads/leads.repository", async (importOriginal) => ({
   leadsRepository: mocks.leads,
 }));
 vi.mock("@backend/features/catalog/catalog.repository", () => ({ catalogRepository: mocks.catalog }));
+vi.mock("@backend/features/users/staff.repository", () => ({ staffRepository: mocks.staff }));
 vi.mock("@backend/features/patients/patients.repository", () => ({ patientsRepository: mocks.patients }));
 vi.mock("@backend/features/appointments/appointments.service", () => ({ bookInTransaction: mocks.book }));
 vi.mock("@backend/lib/logging/audit", async (importOriginal) => ({
@@ -82,7 +83,7 @@ const input = { fullName: "Carla Mendoza", phone: "+63 917 555 0301", email: "",
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.leads.staffWithAccess.mockResolvedValue([staff(FRONT_DESK_ID, "Joy Ramirez", true), staff(DENTIST_ID, "Dr. Ana Reyes", false)]);
+  mocks.staff.activeWithAccess.mockResolvedValue([staff(FRONT_DESK_ID, "Joy Ramirez", true), staff(DENTIST_ID, "Dr. Ana Reyes", false)]);
   mocks.leads.findDetail.mockResolvedValue(leadRow());
   mocks.leads.contactByPhone.mockResolvedValue(null);
   mocks.leads.createContact.mockResolvedValue({ id: CONTACT_ID });

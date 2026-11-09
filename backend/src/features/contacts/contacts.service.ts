@@ -2,6 +2,7 @@ import "server-only";
 import { assertPermission, recordScope, type AuthUser } from "@backend/lib/authorization";
 import { Errors } from "@backend/lib/errors/app-error";
 import { AUDIT_ACTIONS, audit } from "@backend/lib/logging/audit";
+import { consentTimestamp } from "@backend/lib/consent";
 import { prisma } from "@backend/lib/prisma";
 import { contactIdSchema, contactInputSchema, listContactsQuerySchema, newContactSchema } from "./contact.schema";
 import { CONTACTS_PAGE_SIZE, contactsRepository } from "./contacts.repository";
@@ -37,7 +38,7 @@ export async function updateContact(user: AuthUser, rawId: unknown, input: Conta
   await prisma.$transaction(async (tx) => {
     const contact = await contactsRepository.findDetail(recordScope(user), id, tx);
     if (!contact || !visibleContactTypes(user).includes(contact.contactType)) throw Errors.notFound("contact");
-    await contactsRepository.update(id, data, tx);
+    await contactsRepository.update(id, { ...data, marketingOptInAt: consentTimestamp(contact.marketingOptIn, data.marketingOptIn) }, tx);
     await audit({ action: AUDIT_ACTIONS.CONTACT_UPDATED, resourceType: "contact", resourceId: id, actorId: user.id, clinicId: user.clinicId }, tx);
   });
 }
@@ -47,7 +48,7 @@ export async function createContact(user: AuthUser, input: NewContactInput): Pro
   const data = newContactSchema.parse(input);
   if (!visibleContactTypes(user).includes(data.contactType)) throw Errors.forbidden();
   return prisma.$transaction(async (tx) => {
-    const created = await contactsRepository.create(user.clinicId, data, tx);
+    const created = await contactsRepository.create(user.clinicId, { ...data, marketingOptInAt: consentTimestamp(false, data.marketingOptIn) }, tx);
     await audit({ action: AUDIT_ACTIONS.CONTACT_CREATED, resourceType: "contact", resourceId: created.id, actorId: user.id, clinicId: user.clinicId }, tx);
     return created;
   });
