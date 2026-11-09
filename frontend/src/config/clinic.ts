@@ -8,6 +8,7 @@ export {
   clinicMinutesOf,
   clinicToday,
   daysToBirthday,
+  formatMinutes,
   minutesToTime,
   timeToMinutes,
   weekdayOf,

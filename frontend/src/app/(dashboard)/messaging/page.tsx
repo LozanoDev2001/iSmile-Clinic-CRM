@@ -19,6 +19,7 @@ import {
   listConversations,
   previewAudiences,
 } from "@backend/features/messaging/messaging.service";
+import { miaStatus, pendingDrafts } from "@backend/features/crwdforce/crwdforce.service";
 import { can, pageCan } from "@backend/lib/authorization";
 import { isAppError } from "@backend/lib/errors/app-error";
 
@@ -38,7 +39,9 @@ export default async function MessagingPage({ searchParams }: { searchParams: Pr
       getMessagingStaff(user),
       state.c ? getConversation(user, state.c).catch((e) => (isAppError(e) && e.code === "NOT_FOUND" ? null : Promise.reject(e))) : null,
     ]);
-    body = <InboxView state={state} conversations={conversations} conversation={conversation} savedReplies={savedReplies} staff={staff} canSend={canSend} />;
+    const miaDraft = conversation && can(user, "crwdforce.read") ? ((await pendingDrafts(user, [conversation.id]))[conversation.id] ?? null) : null;
+    const mia = can(user, "crwdforce.read") ? { connected: miaStatus().connected, draft: miaDraft } : null;
+    body = <InboxView state={state} conversations={conversations} conversation={conversation} savedReplies={savedReplies} staff={staff} canSend={canSend} mia={mia} />;
   } else if (state.section === "birthdays") {
     const [celebrants, sent, greeting] = await Promise.all([getCelebrants(user), getGreetingsSent(user), getGreeting(user)]);
     body = <BirthdaysView celebrants={celebrants} sent={sent} greeting={greeting} canSend={canSend} />;

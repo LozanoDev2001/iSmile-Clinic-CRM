@@ -8,7 +8,7 @@ import type { ConversationDetail, ConversationSummary, SavedReply } from "@backe
 import { MESSAGE_CHANNELS } from "@backend/features/patients/patient.schema";
 import type { NamedRef } from "@backend/features/patients/patients.types";
 import { DELIVERY_LABELS, messagingHref, type MessagingState } from "../messaging-state";
-import { Composer } from "./composer";
+import { Composer, type MiaAssist } from "./composer";
 import { AssignSelect, MarkSentButton, StatusButton } from "./conversation-actions";
 
 const KIND_LABELS: Record<string, string> = { birthday: "Birthday greeting", broadcast: "Broadcast" };
@@ -69,7 +69,7 @@ function ConversationList({ state, conversations }: { state: MessagingState; con
   );
 }
 
-function Thread({ conversation: c, savedReplies, canSend }: { conversation: ConversationDetail; savedReplies: SavedReply[]; canSend: boolean }) {
+function Thread({ conversation: c, savedReplies, canSend, mia }: { conversation: ConversationDetail; savedReplies: SavedReply[]; canSend: boolean; mia: MiaAssist | null }) {
   return (
     <section aria-label={`Conversation with ${c.contact.name}`} className="glass-card flex min-w-0 flex-col gap-3 rounded-[24px] p-4">
       <div className="flex items-center gap-3 border-b border-[#E3E7ED] pb-3">
@@ -98,7 +98,7 @@ function Thread({ conversation: c, savedReplies, canSend }: { conversation: Conv
           </li>
         ))}
       </ol>
-      {canSend ? <Composer conversationId={c.id} savedReplies={savedReplies} fill={c.fill} channelLabel={channelLabel(c.channel)} /> : null}
+      {canSend ? <Composer conversationId={c.id} savedReplies={savedReplies} fill={c.fill} channelLabel={channelLabel(c.channel)} mia={mia} /> : null}
     </section>
   );
 }
@@ -153,15 +153,16 @@ interface InboxViewProps {
   savedReplies: SavedReply[];
   staff: NamedRef[];
   canSend: boolean;
+  mia: MiaAssist | null;
 }
 
-export function InboxView({ state, conversations, conversation, savedReplies, staff, canSend }: InboxViewProps) {
+export function InboxView({ state, conversations, conversation, savedReplies, staff, canSend, mia }: InboxViewProps) {
   return (
     <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_260px] xl:items-start">
       <ConversationList state={state} conversations={conversations} />
       {conversation ? (
         <>
-          <Thread conversation={conversation} savedReplies={savedReplies} canSend={canSend} />
+          <Thread conversation={conversation} savedReplies={savedReplies} canSend={canSend} mia={mia} />
           <ContextPanel conversation={conversation} staff={staff} canSend={canSend} />
         </>
       ) : (

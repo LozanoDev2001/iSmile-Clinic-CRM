@@ -60,3 +60,10 @@ export function daysToBirthday(dob: string | null, today = clinicToday()): numbe
   if (next < t.getTime()) next = Date.UTC(t.getUTCFullYear() + 1, bm - 1, bd);
   return Math.round((next - t.getTime()) / MS_PER_DAY);
 }
+
+/** "9:30 AM" for 570 minutes after midnight. */
+export function formatMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h % 12 || 12}:${m} ${h >= 12 ? "PM" : "AM"}`;
+}

@@ -34,7 +34,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "crwdForce",
     icon: Headphones,
     permission: "crwdforce.read",
-    comingSoon: "Mia, the AI receptionist, will answer chats and calls and book appointments here.",
   },
   {
     key: "leads",

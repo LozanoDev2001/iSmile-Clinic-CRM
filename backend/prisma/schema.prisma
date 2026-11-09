@@ -20,6 +20,7 @@ model Clinic {
   settings            Json
   createdAt           DateTime             @default(now()) @map("created_at")
   broadcasts          Broadcast[]
+  miaDrafts           MiaDraft[]
   appointmentChairs   AppointmentChair[]
   appointments        Appointment[]
   approvalRequests    ApprovalRequest[]
@@ -89,6 +90,8 @@ model User {
   clinic                           Clinic                   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "users_ibfk_1")
 
   broadcasts Broadcast[]
+
+  miaDrafts MiaDraft[]
 
   @@unique([clinicId, email], map: "clinic_id")
   @@unique([clinicId, staffCode], map: "clinic_id_2")
@@ -352,18 +355,19 @@ model Contact {
 }
 
 model Conversation {
-  id            String    @id @default(uuid()) @db.Char(36)
-  clinicId      String    @map("clinic_id") @db.Char(36)
-  contactId     String    @map("contact_id") @db.Char(36)
-  channel       String    @db.VarChar(255)
-  assignedToId  String?   @map("assigned_to") @db.Char(36)
-  status        String    @default("open") @db.VarChar(255)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  externalRef   String?   @map("external_ref") @db.VarChar(191)
-  lastMessageAt DateTime? @map("last_message_at")
-  clinic        Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
-  contact       Contact   @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
-  assignedTo    User?     @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
+  id            String     @id @default(uuid()) @db.Char(36)
+  clinicId      String     @map("clinic_id") @db.Char(36)
+  contactId     String     @map("contact_id") @db.Char(36)
+  channel       String     @db.VarChar(255)
+  assignedToId  String?    @map("assigned_to") @db.Char(36)
+  status        String     @default("open") @db.VarChar(255)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  externalRef   String?    @map("external_ref") @db.VarChar(191)
+  lastMessageAt DateTime?  @map("last_message_at")
+  clinic        Clinic     @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
+  contact       Contact    @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
+  assignedTo    User?      @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
+  miaDrafts     MiaDraft[]
   messages      Message[]
 
   @@unique([clinicId, channel, externalRef], map: "conversations_external_ref")
@@ -865,4 +869,33 @@ model Broadcast {
   @@index([clinicId, createdAt], map: "broadcasts_clinic_created")
   @@index([createdById], map: "broadcasts_created_by")
   @@map("broadcasts")
+}
+
+/// A reply Mia (crwdForce) suggested for a conversation; staff use or dismiss it.
+model MiaDraft {
+  id             String       @id @default(uuid()) @db.Char(36)
+  clinicId       String       @map("clinic_id") @db.Char(36)
+  conversationId String       @map("conversation_id") @db.Char(36)
+  reply          String       @db.Text
+  summary        String       @db.Text
+  intent         String       @db.VarChar(40)
+  nextStep       String       @map("next_step") @db.VarChar(40)
+  slotLabel      String?      @map("slot_label") @db.VarChar(120)
+  handover       Boolean      @default(false)
+  handoverReason String?      @map("handover_reason") @db.VarChar(255)
+  status         String       @default("pending") @db.VarChar(20)
+  model          String       @db.VarChar(60)
+  inputTokens    Int          @default(0) @map("input_tokens")
+  outputTokens   Int          @default(0) @map("output_tokens")
+  createdById    String?      @map("created_by") @db.Char(36)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  decidedAt      DateTime?    @map("decided_at")
+  clinic         Clinic       @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "mia_drafts_clinic_fkey")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onUpdate: Restrict, map: "mia_drafts_conversation_fkey")
+  createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "mia_drafts_created_by_fkey")
+
+  @@index([clinicId, createdAt], map: "mia_drafts_clinic_created")
+  @@index([conversationId], map: "mia_drafts_conversation")
+  @@index([createdById], map: "mia_drafts_created_by")
+  @@map("mia_drafts")
 }

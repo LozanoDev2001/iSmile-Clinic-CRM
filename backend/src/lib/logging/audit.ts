@@ -38,6 +38,8 @@ export const AUDIT_ACTIONS = {
   CONTACT_UPDATED: "contact.updated",
   MESSAGE_RECEIVED: "message.received",
   BROADCAST_SENT: "broadcast.sent",
+  MIA_DRAFTED: "mia.drafted",
+  MIA_SETTINGS_UPDATED: "mia.settings_updated",
   LEAD_UPDATED: "lead.updated",
   PATIENT_UPDATED: "patient.updated",
   PATIENT_MEDICAL_VIEWED: "patient.medical.viewed",

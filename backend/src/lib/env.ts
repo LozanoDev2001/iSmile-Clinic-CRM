@@ -30,6 +30,8 @@ const schema = z
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
     EMAIL_FROM: z.string().default("iSmile CRM <no-reply@ismile.local>"),
+    // Mia (crwdForce) drafts replies with Claude; without a key she shows as not connected.
+    ANTHROPIC_API_KEY: z.string().optional(),
   })
   .superRefine((value, ctx) => {
     // Password reset and invitations depend on email in production. Checked

@@ -63,6 +63,25 @@ async function openSlotsFor(clinicId: string, dentistId: string, date: string, d
   return computeOpenSlots(openingHoursOn(hours, date), duration, busy, date === today ? clinicMinutesOf(new Date()) : null);
 }
 
+/** Open start times over the next `days` open clinic days for every dentist, at most `perDay` each, for suggesting bookings. */
+export async function upcomingOpenSlots(clinicId: string, days: number, duration: number, perDay: number) {
+  const [[dentists], hours] = await Promise.all([patientsRepository.formOptions(clinicId), clinicHours(clinicId)]);
+  const result: { date: string; dentist: { id: string; name: string }; startMinutes: number }[] = [];
+  const LOOKAHEAD_DAYS = 14;
+  let openDays = 0;
+  for (let offset = 0; offset < LOOKAHEAD_DAYS && openDays < days; offset++) {
+    const date = addDays(clinicToday(), offset);
+    const dayHours = openingHoursOn(hours, date);
+    if (!dayHours || dayHours.closed) continue;
+    openDays++;
+    for (const d of dentists) {
+      const slots = await openSlotsFor(clinicId, d.id, date, duration, undefined);
+      for (const startMinutes of slots.slice(0, perDay)) result.push({ date, dentist: { id: d.id, name: d.fullName }, startMinutes });
+    }
+  }
+  return result;
+}
+
 export async function listAppointments(user: AuthUser, rawRange: unknown): Promise<CalendarAppointment[]> {
   assertPermission(user, "appointments.read");
   const { from, to } = rangeQuerySchema.parse(rawRange);

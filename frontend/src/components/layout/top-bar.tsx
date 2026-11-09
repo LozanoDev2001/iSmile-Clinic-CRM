@@ -7,9 +7,11 @@ import { NotificationsButton } from "./notifications-button";
 interface TopBarProps {
   userName: string;
   roleLabel: string;
+  /** Whether Mia (crwdForce) can draft replies; null hides the pill for people without crwdForce. */
+  miaConnected: boolean | null;
 }
 
-export function TopBar({ userName, roleLabel }: TopBarProps) {
+export function TopBar({ userName, roleLabel, miaConnected }: TopBarProps) {
   const initial = userName.replace(/^Dr\.?\s*/i, "").charAt(0).toUpperCase();
   return (
     <header className="flex items-center gap-2 text-[#0E2A47] sm:gap-3">
@@ -40,10 +42,12 @@ export function TopBar({ userName, roleLabel }: TopBarProps) {
 
       <NotificationsButton />
 
-      <span className="glass-pill hidden h-[52px] items-center gap-2 rounded-full px-[18px] text-sm text-[#46566B] xl:inline-flex">
-        <span className="size-2 rounded-full bg-[#9AA6B6]" aria-hidden />
-        Mia not connected
-      </span>
+      {miaConnected === null ? null : (
+        <Link href="/crwdforce" className="glass-pill hidden h-[52px] items-center gap-2 rounded-full px-[18px] text-sm text-[#46566B] hover:brightness-[0.98] xl:inline-flex">
+          <span className={miaConnected ? "size-2 rounded-full bg-[#2E9E63]" : "size-2 rounded-full bg-[#9AA6B6]"} aria-hidden />
+          {miaConnected ? "Mia is drafting replies" : "Mia not connected"}
+        </Link>
+      )}
 
       <div className="glass-pill inline-flex h-11 shrink-0 items-center gap-2.5 rounded-full pr-1.5 pl-1 sm:h-[52px] sm:pr-2 sm:pl-1.5">
         <span className="grid size-9 place-items-center rounded-full bg-[#DCEAFB] text-base font-medium sm:size-10">{initial}</span>

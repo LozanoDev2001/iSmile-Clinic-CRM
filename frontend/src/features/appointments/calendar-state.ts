@@ -105,12 +105,7 @@ export const SOURCE_LABELS: Record<BookingSource, string> = {
   lead: "From a lead",
 };
 
-/** "9:30 AM" for 570 minutes after midnight. */
-export function formatMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = String(minutes % 60).padStart(2, "0");
-  return `${h % 12 || 12}:${m} ${h >= 12 ? "PM" : "AM"}`;
-}
+export { formatMinutes } from "@/config/clinic";
 
 const longDate = new Intl.DateTimeFormat("en-PH", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const shortDate = new Intl.DateTimeFormat("en-PH", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });

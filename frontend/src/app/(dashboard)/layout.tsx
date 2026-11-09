@@ -11,6 +11,7 @@ import { ROLE_LABELS } from "@backend/config/permissions";
 import { SECURITY } from "@backend/config/security";
 import { can, requirePageUser, type AuthUser } from "@backend/lib/authorization";
 import { normalizeError } from "@backend/lib/errors/api-error-handler";
+import { miaStatus } from "@backend/features/crwdforce/crwdforce.service";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   let user: AuthUser;
@@ -30,7 +31,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       {user.idleSignOut ? <IdleSignOut minutes={SECURITY.idleSignOut.minutes} /> : null}
       <AppSidebar allowedKeys={allowedKeys} userName={user.name} roleLabel={roleLabel} />
       <div className="flex min-w-0 flex-1 flex-col gap-4 px-0 pb-[calc(88px+env(safe-area-inset-bottom))] sm:px-1 md:pb-6">
-        <TopBar userName={user.name} roleLabel={roleLabel} />
+        <TopBar userName={user.name} roleLabel={roleLabel} miaConnected={can(user, "crwdforce.read") ? miaStatus().connected : null} />
         <main className="min-w-0">{children}</main>
       </div>
     </div>
