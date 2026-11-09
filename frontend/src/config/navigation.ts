@@ -42,7 +42,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Leads",
     icon: Filter,
     permission: "leads.read",
-    comingSoon: "Track every inquiry from first message to booked appointment on a pipeline board.",
   },
   {
     key: "contacts",
@@ -50,7 +49,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Contacts",
     icon: SquareUser,
     permission: "contacts.read",
-    comingSoon: "Everyone who has contacted the clinic, with their channels and history.",
   },
   {
     key: "patients",

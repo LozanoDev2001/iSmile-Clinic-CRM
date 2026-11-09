@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { clinicDateOf, clinicToday } from "@/config/clinic";
 import { selectClass } from "@/components/forms/styles";
 import { cn } from "@/lib/utils";
-import { BOOKING_SOURCES, MAX_DURATION, MIN_DURATION } from "@backend/features/appointments/appointment.schema";
+import { MAX_DURATION, MIN_DURATION, STAFF_BOOKING_SOURCES } from "@backend/features/appointments/appointment.schema";
 import { bookAppointmentAction, getOpenSlotsAction, rescheduleAppointmentAction } from "@backend/features/appointments/appointments.controller";
 import type { BookingOptions, BookingSource, CalendarAppointment } from "@backend/features/appointments/appointments.types";
 import { PatientPicker, type PatientChoice } from "@/features/patients/components/patient-picker";
@@ -197,7 +197,7 @@ export function BookingDialog({ state, options, appointment, patient: initialPat
                 Booked via
               </span>
               <div className="flex flex-wrap gap-2">
-                {BOOKING_SOURCES.map((s) => (
+                {STAFF_BOOKING_SOURCES.map((s) => (
                   <button key={s} type="button" aria-pressed={source === s} onClick={() => setSource(s)} className={chip(source === s)}>
                     {SOURCE_LABELS[s]}
                   </button>

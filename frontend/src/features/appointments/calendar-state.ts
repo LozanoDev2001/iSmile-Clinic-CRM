@@ -102,6 +102,7 @@ export const SOURCE_LABELS: Record<BookingSource, string> = {
   phone: "Phone call",
   walk_in: "Walk-in",
   online: "Online booking",
+  lead: "From a lead",
 };
 
 /** "9:30 AM" for 570 minutes after midnight. */

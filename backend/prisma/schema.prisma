@@ -186,6 +186,7 @@ model Appointment {
   notes         String?           @db.Text
   createdById   String?           @map("created_by") @db.Char(36)
   createdAt     DateTime          @default(now()) @map("created_at")
+  leads         Lead[]
   invoices      Invoice[]
   clinic        Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_1")
   patient       Patient           @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_2")
@@ -532,6 +533,15 @@ model Lead {
   convertedPatientId  String?        @map("converted_patient_id") @db.Char(36)
   createdAt           DateTime       @default(now()) @map("created_at")
   convertedAt         DateTime?      @map("converted_at")
+  status              String         @default("open") @db.VarChar(20)
+  hot                 Boolean        @default(false)
+  message             String?        @db.Text
+  nextActionAt        DateTime?      @map("next_action_at")
+  attempts            Int            @default(0)
+  closedAt            DateTime?      @map("closed_at")
+  closedReason        String?        @map("closed_reason") @db.VarChar(120)
+  wonValue            Decimal?       @map("won_value") @db.Decimal(12, 2)
+  appointmentId       String?        @map("appointment_id") @db.Char(36)
   leadActivities      LeadActivity[]
   clinic              Clinic         @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "leads_ibfk_1")
   contact             Contact        @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "leads_ibfk_2")
@@ -539,6 +549,7 @@ model Lead {
   assignedTo          User?          @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_4")
   convertedPatient    Patient?       @relation(fields: [convertedPatientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_5")
   interestedService   Service?       @relation(fields: [interestedServiceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_interested_service_fkey")
+  appointment         Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_appointment_fkey")
 
   @@index([assignedToId], map: "assigned_to")
   @@index([clinicId], map: "clinic_id")
@@ -546,6 +557,8 @@ model Lead {
   @@index([convertedPatientId], map: "converted_patient_id")
   @@index([interestedServiceId], map: "leads_interested_service_fkey")
   @@index([sourceId], map: "source_id")
+  @@index([clinicId, status, stage], map: "leads_board_idx")
+  @@index([appointmentId], map: "leads_appointment_id")
   @@map("leads")
 }
 

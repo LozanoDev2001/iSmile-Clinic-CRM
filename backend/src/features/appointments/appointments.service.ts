@@ -123,28 +123,33 @@ async function findInScope(user: AuthUser, rawId: unknown, tx: TransactionClient
 export async function bookAppointment(user: AuthUser, input: BookAppointmentInput): Promise<{ id: string }> {
   assertPermission(user, "appointments.create");
   const data = bookAppointmentSchema.parse(input);
-  return prisma.$transaction(async (tx) => {
-    if (!(await patientsRepository.exists(recordScope(user), data.patientId, tx))) throw Errors.validation({ patientId: ["Choose a patient from the list"] });
-    if (data.serviceId && !(await catalogRepository.findActive(user.clinicId, data.serviceId, tx))) throw Errors.validation({ serviceId: ["Choose a service from the list"] });
-    const slot = await assertSlotFree(user, data, data.patientId, undefined, tx);
-    const created = await appointmentsRepository.create(
-      user.clinicId,
-      { ...slot, patientId: data.patientId, serviceId: data.serviceId, bookingSource: data.bookingSource, notes: data.notes, createdById: user.id },
-      tx,
-    );
-    await audit(
-      {
-        action: AUDIT_ACTIONS.APPOINTMENT_BOOKED,
-        resourceType: "appointment",
-        resourceId: created.id,
-        actorId: user.id,
-        clinicId: user.clinicId,
-        metadata: { startsAt: slot.startsAt.toISOString(), dentistId: slot.dentistId, patientId: data.patientId },
-      },
-      tx,
-    );
-    return created;
-  });
+  return prisma.$transaction((tx) => bookInTransaction(user, data, tx));
+}
+
+/** Books inside the caller's transaction, so other modules (e.g. leads) can book as part of a bigger change. */
+export async function bookInTransaction(user: AuthUser, input: BookAppointmentInput, tx: TransactionClient): Promise<{ id: string }> {
+  assertPermission(user, "appointments.create");
+  const data = bookAppointmentSchema.parse(input);
+  if (!(await patientsRepository.exists(recordScope(user), data.patientId, tx))) throw Errors.validation({ patientId: ["Choose a patient from the list"] });
+  if (data.serviceId && !(await catalogRepository.findActive(user.clinicId, data.serviceId, tx))) throw Errors.validation({ serviceId: ["Choose a service from the list"] });
+  const slot = await assertSlotFree(user, data, data.patientId, undefined, tx);
+  const created = await appointmentsRepository.create(
+    user.clinicId,
+    { ...slot, patientId: data.patientId, serviceId: data.serviceId, bookingSource: data.bookingSource, notes: data.notes, createdById: user.id },
+    tx,
+  );
+  await audit(
+    {
+      action: AUDIT_ACTIONS.APPOINTMENT_BOOKED,
+      resourceType: "appointment",
+      resourceId: created.id,
+      actorId: user.id,
+      clinicId: user.clinicId,
+      metadata: { startsAt: slot.startsAt.toISOString(), dentistId: slot.dentistId, patientId: data.patientId },
+    },
+    tx,
+  );
+  return created;
 }
 
 export async function rescheduleAppointment(user: AuthUser, rawId: unknown, input: RescheduleAppointmentInput): Promise<CalendarAppointment> {

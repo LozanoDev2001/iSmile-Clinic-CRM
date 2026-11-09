@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const APPOINTMENT_STATUSES = ["booked", "confirmed", "checked_in", "in_progress", "completed", "cancelled", "no_show"] as const;
-export const BOOKING_SOURCES = ["front_desk", "phone", "walk_in", "online"] as const;
+export const BOOKING_SOURCES = ["front_desk", "phone", "walk_in", "online", "lead"] as const;
+/** Sources staff pick when booking by hand; "lead" is set when a lead books its consult. */
+export const STAFF_BOOKING_SOURCES = ["front_desk", "phone", "walk_in", "online"] as const;
 
 /** Which status changes staff can make from each status. Completed and cancelled are final. */
 export const STATUS_TRANSITIONS: Record<(typeof APPOINTMENT_STATUSES)[number], readonly (typeof APPOINTMENT_STATUSES)[number][]> = {

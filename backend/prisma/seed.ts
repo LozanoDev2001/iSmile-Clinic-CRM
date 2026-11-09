@@ -158,6 +158,46 @@ async function seedStaff(clinicId: string, passwordHash: string, roleIds: Awaite
   }
 }
 
+const LEAD_SOURCES = ["Facebook", "Instagram", "Google", "TikTok", "Website", "Messenger", "Viber", "WhatsApp", "Phone call", "Walk-in", "Referral"];
+
+async function seedLeadSources(clinicId: string) {
+  await prisma.leadSource.createMany({ data: LEAD_SOURCES.map((name) => ({ clinicId, name })), skipDuplicates: true });
+}
+
+/** A few open leads across the pipeline, so the Leads board has something to show. */
+async function seedLeads(clinicId: string) {
+  if ((await prisma.lead.count({ where: { clinicId } })) > 0) return;
+  const frontDesk = await prisma.user.findFirst({ where: { clinicId, email: DEMO_STAFF[1].email }, select: { id: true } });
+  const source = async (name: string) => (await prisma.leadSource.findFirst({ where: { clinicId, name }, select: { id: true } }))?.id;
+  const service = async (code: string) => (await prisma.service.findFirst({ where: { clinicId, code }, select: { id: true } }))?.id;
+  const hour = 3_600_000;
+  const samples = [
+    { name: "Carla Mendoza", phone: "+63 917 555 0301", src: "Facebook", svc: "ALN", stage: "new", hot: true, msg: "Hi! How much are clear aligners? Do you have installment?" },
+    { name: "Paolo Garcia", phone: "+63 918 555 0302", src: "Instagram", svc: "WHT", stage: "new", hot: false, msg: "Interested in whitening before my wedding next month." },
+    { name: "Liza Bautista", phone: "+63 919 555 0303", src: "Google", svc: "PROPH", stage: "assigned", hot: false, msg: "Can I book a cleaning this Saturday?" },
+    { name: "Mark Villanueva", phone: "+63 920 555 0304", src: "TikTok", svc: "OCON", stage: "follow_up", hot: false, msg: "My son needs braces. What's the process?" },
+    { name: "Grace Lim", phone: "+63 921 555 0305", src: "Referral", svc: "VEN", stage: "plan_sent", hot: true, msg: "Referred by my sister. Interested in veneers." },
+  ];
+  for (const s of samples) {
+    const contact = await prisma.contact.create({ data: { clinicId, contactType: "lead", fullName: s.name, phone: s.phone, preferredChannel: "viber" }, select: { id: true } });
+    const assigned = s.stage !== "new" && frontDesk;
+    await prisma.lead.create({
+      data: {
+        clinicId,
+        contactId: contact.id,
+        sourceId: await source(s.src),
+        interestedServiceId: await service(s.svc),
+        stage: s.stage,
+        hot: s.hot,
+        message: s.msg,
+        assignedToId: assigned ? frontDesk.id : null,
+        nextActionAt: assigned ? new Date(Date.now() + 2 * hour) : null,
+        leadActivities: { create: { activityType: "created", content: `Lead came in from ${s.src}` } },
+      },
+    });
+  }
+}
+
 async function main() {
   const passwordHash = await hash(DEMO_ACCOUNT.password, { memoryCost: 19_456, timeCost: 2, parallelism: 1 });
   const roleIds = await seedAccessModel(prisma);
@@ -196,6 +236,8 @@ async function main() {
   await seedHmos(clinic.id);
   await seedStaff(clinic.id, passwordHash, roleIds);
   await seedAppointments(clinic.id, owner.id);
+  await seedLeadSources(clinic.id);
+  await seedLeads(clinic.id);
   console.log(`Seeded clinic "${clinic.name}", ${roleIds.size} roles, owner ${DEMO_ACCOUNT.email}.`);
 }
 
