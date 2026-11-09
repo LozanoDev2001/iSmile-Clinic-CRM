@@ -1,23 +1,21 @@
 /**
- * Development seed: one clinic, two branches, one user per role, a few
- * patients. Run with `npm run db:seed`. Refuses to run in production.
- *
- * All seeded users share SEED_PASSWORD (required, min 12 chars).
+ * Development seed: permissions, the system roles and their templates, one
+ * clinic, the owner account and a few patients. Run with `npm run db:seed`.
+ * Safe to re-run. Refuses to run in production.
  */
 import { config } from "dotenv";
 import { hash } from "@node-rs/argon2";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-import { PrismaClient, type Role } from "../src/generated/prisma/client";
+import { PrismaClient } from "../src/generated/prisma/client";
+import { DEMO_ACCOUNT } from "../src/features/auth/demo-credentials";
+import { DEFAULT_SIGN_IN_RULES } from "../src/features/settings/settings.types";
+import { seedAccessModel } from "./seed-access";
 
 // Single .env at the repository root.
 config({ path: "../.env" });
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to seed a production database.");
-}
-const password = process.env.SEED_PASSWORD;
-if (!password || password.length < 12) {
-  throw new Error("Set SEED_PASSWORD (at least 12 characters) before seeding.");
 }
 
 const url = new URL(process.env.DATABASE_URL ?? "");
@@ -32,61 +30,59 @@ const prisma = new PrismaClient({
   }),
 });
 
+const CLINIC_ID = "00000000-0000-4000-8000-000000000001";
+
+async function seedPatients(clinicId: string) {
+  if ((await prisma.patient.count({ where: { clinicId } })) > 0) return;
+  const samples = [
+    { fullName: "Maria Lopez", phone: "+1555010001", medicalAlerts: "Penicillin allergy" },
+    { fullName: "John Smith", phone: "+1555010002" },
+    { fullName: "Aiko Tanaka", phone: "+1555010003" },
+  ];
+  for (const [i, s] of samples.entries()) {
+    const contact = await prisma.contact.create({
+      data: { clinicId, contactType: "patient", fullName: s.fullName, phone: s.phone },
+      select: { id: true },
+    });
+    await prisma.patient.create({
+      data: { clinicId, contactId: contact.id, patientNo: `P-${String(i + 1).padStart(4, "0")}`, medicalAlerts: s.medicalAlerts },
+    });
+  }
+}
+
 async function main() {
-  const passwordHash = await hash(password!, { memoryCost: 19_456, timeCost: 2, parallelism: 1 });
+  const passwordHash = await hash(DEMO_ACCOUNT.password, { memoryCost: 19_456, timeCost: 2, parallelism: 1 });
+  const roleIds = await seedAccessModel(prisma);
 
   const clinic = await prisma.clinic.upsert({
-    where: { id: "cseedclinic00000000000001" },
+    where: { id: CLINIC_ID },
     update: {},
-    create: { id: "cseedclinic00000000000001", name: "iSmile Downtown" },
+    create: { id: CLINIC_ID, name: "iSmile Downtown", settings: { signIn: DEFAULT_SIGN_IN_RULES } },
+    select: { id: true, name: true },
   });
-  const [main, north] = await Promise.all(
-    [
-      { id: "cseedbranch00000000000001", name: "Main Street" },
-      { id: "cseedbranch00000000000002", name: "North Plaza" },
-    ].map((b) =>
-      prisma.branch.upsert({ where: { id: b.id }, update: {}, create: { ...b, clinicId: clinic.id } }),
-    ),
-  );
 
-  const users: { email: string; name: string; role: Role; branches: string[] }[] = [
-    { email: "superadmin@ismile.test", name: "Sam Super", role: "SUPER_ADMIN", branches: [] },
-    { email: "admin@ismile.test", name: "Alex Admin", role: "CLINIC_ADMIN", branches: [] },
-    { email: "dentist@ismile.test", name: "Dana Dentist", role: "DENTIST", branches: [main.id] },
-    { email: "reception@ismile.test", name: "Riley Reception", role: "RECEPTIONIST", branches: [main.id, north.id] },
-    { email: "finance@ismile.test", name: "Frankie Finance", role: "FINANCE_STAFF", branches: [main.id] },
-    { email: "crm@ismile.test", name: "Casey CRM", role: "CRM_STAFF", branches: [north.id] },
-  ];
+  // Update keeps the stored password in sync when the seed is re-run.
+  const owner = await prisma.user.upsert({
+    where: { clinicId_email: { clinicId: clinic.id, email: DEMO_ACCOUNT.email } },
+    update: { passwordHash, status: "active" },
+    create: {
+      clinicId: clinic.id,
+      email: DEMO_ACCOUNT.email,
+      fullName: DEMO_ACCOUNT.name,
+      staffCode: "OW-001",
+      status: "active",
+      passwordHash,
+    },
+    select: { id: true },
+  });
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: owner.id, roleId: roleIds.get("OWNER")! } },
+    update: {},
+    create: { userId: owner.id, roleId: roleIds.get("OWNER")! },
+  });
 
-  const created: Record<string, string> = {};
-  for (const u of users) {
-    const user = await prisma.user.upsert({
-      where: { email: u.email },
-      update: {},
-      create: {
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        passwordHash,
-        clinicId: u.role === "SUPER_ADMIN" ? null : clinic.id,
-        branches: { create: u.branches.map((branchId) => ({ branchId })) },
-      },
-    });
-    created[u.role] = user.id;
-  }
-
-  const patientCount = await prisma.patient.count({ where: { clinicId: clinic.id } });
-  if (patientCount === 0) {
-    await prisma.patient.createMany({
-      data: [
-        { clinicId: clinic.id, branchId: main.id, firstName: "Maria", lastName: "Lopez", phone: "+1555010001", primaryDentistId: created.DENTIST, allergies: "Penicillin" },
-        { clinicId: clinic.id, branchId: main.id, firstName: "John", lastName: "Smith", phone: "+1555010002" },
-        { clinicId: clinic.id, branchId: north.id, firstName: "Aiko", lastName: "Tanaka", phone: "+1555010003" },
-      ],
-    });
-  }
-
-  console.log(`Seeded clinic "${clinic.name}" with ${users.length} users (password from SEED_PASSWORD).`);
+  await seedPatients(clinic.id);
+  console.log(`Seeded clinic "${clinic.name}", ${roleIds.size} roles, owner ${DEMO_ACCOUNT.email}.`);
 }
 
 main()

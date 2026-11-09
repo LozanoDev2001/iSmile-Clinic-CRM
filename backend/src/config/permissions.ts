@@ -1,31 +1,44 @@
 /**
- * Central RBAC definition. Add a permission here, grant it to roles below,
- * and check it with `requirePermission()` on the server or `can()` for UI.
+ * Central permission vocabulary and role rules. Which permissions a user holds
+ * is derived from their window access (src/config/access.ts): a role template
+ * plus any per-user overrides. Check with `can()` / `assertPermission()`.
  * Never hard-code role names in pages or services.
  *
- * Note: a permission only says WHAT a role may do. WHICH records it may touch
- * is decided by clinic / branch / record scoping in src/lib/authorization.ts.
+ * Note: a permission only says WHAT a user may do. WHICH records they may touch
+ * is decided by clinic and record scoping in src/lib/authorization.ts.
  */
-import type { Role } from "@backend/generated/prisma/enums";
-
 export const PERMISSIONS = [
+  "dashboards.frontdesk",
+  "dashboards.dentist",
+  "dashboards.accounts",
+  "dashboards.owner",
+
+  "crwdforce.read",
+  "crwdforce.update",
+
+  "leads.read",
+  "leads.create",
+  "leads.update",
+
+  "contacts.read",
+  "contacts.update",
+
   "patients.read",
   "patients.create",
   "patients.update",
   "patients.medical.read",
   "patients.medical.update",
 
+  "treatments.read",
+  "treatments.update",
+
+  "messaging.read",
+  "messaging.send",
+
   "appointments.read",
   "appointments.create",
   "appointments.update",
   "appointments.cancel",
-
-  "treatments.read",
-  "treatments.update",
-
-  "leads.read",
-  "leads.create",
-  "leads.update",
 
   "billing.read",
   "billing.create",
@@ -45,102 +58,45 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/** Role codes stored in `roles.code` for the system roles (clinic_id NULL). */
 export const ROLES = [
-  "SUPER_ADMIN",
-  "CLINIC_ADMIN",
+  "OWNER",
+  "GENERAL_MANAGER",
   "DENTIST",
-  "RECEPTIONIST",
-  "FINANCE_STAFF",
-  "CRM_STAFF",
-] as const satisfies readonly Role[];
+  "FRONT_DESK",
+  "ACCOUNTS",
+  "DENTAL_ASSISTANT",
+] as const;
+
+export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
-  SUPER_ADMIN: "Super Admin",
-  CLINIC_ADMIN: "Clinic Admin",
+  OWNER: "Owner",
+  GENERAL_MANAGER: "General manager",
   DENTIST: "Dentist",
-  RECEPTIONIST: "Receptionist",
-  FINANCE_STAFF: "Finance Staff",
-  CRM_STAFF: "CRM Staff",
+  FRONT_DESK: "Front desk",
+  ACCOUNTS: "Accounts",
+  DENTAL_ASSISTANT: "Dental assistant",
 };
-
-export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
-  SUPER_ADMIN: PERMISSIONS,
-
-  CLINIC_ADMIN: [
-    "patients.read",
-    "patients.create",
-    "patients.update",
-    "appointments.read",
-    "appointments.create",
-    "appointments.update",
-    "appointments.cancel",
-    "treatments.read",
-    "leads.read",
-    "billing.read",
-    "reports.read",
-    "users.read",
-    "users.create",
-    "users.update",
-    "settings.read",
-    "settings.update",
-    "audit.read",
-  ],
-
-  DENTIST: [
-    "patients.read",
-    "patients.update",
-    "patients.medical.read",
-    "patients.medical.update",
-    "appointments.read",
-    "appointments.update",
-    "treatments.read",
-    "treatments.update",
-  ],
-
-  RECEPTIONIST: [
-    "patients.read",
-    "patients.create",
-    "patients.update",
-    "appointments.read",
-    "appointments.create",
-    "appointments.update",
-    "appointments.cancel",
-  ],
-
-  FINANCE_STAFF: ["patients.read", "billing.read", "billing.create", "billing.update", "reports.read"],
-
-  CRM_STAFF: ["leads.read", "leads.create", "leads.update"],
-};
-
-/**
- * Roles that see every branch of their clinic. Other roles only see the
- * branches assigned to them in `user_branches`.
- */
-export const CLINIC_WIDE_ROLES: readonly Role[] = ["SUPER_ADMIN", "CLINIC_ADMIN"];
 
 /** Roles limited to records explicitly assigned to them (record-level access). */
 export const ASSIGNED_RECORDS_ONLY_ROLES: readonly Role[] = ["DENTIST"];
 
-/** Roles each role may assign when creating or editing users. */
+/**
+ * Roles each role may assign, and therefore whose accounts it may edit.
+ * Owners are created by the seed / onboarding, never from the app.
+ */
 export const ASSIGNABLE_ROLES: Record<Role, readonly Role[]> = {
-  SUPER_ADMIN: ROLES,
-  CLINIC_ADMIN: ["CLINIC_ADMIN", "DENTIST", "RECEPTIONIST", "FINANCE_STAFF", "CRM_STAFF"],
+  OWNER: ["GENERAL_MANAGER", "DENTIST", "FRONT_DESK", "ACCOUNTS", "DENTAL_ASSISTANT"],
+  GENERAL_MANAGER: ["DENTIST", "FRONT_DESK", "ACCOUNTS", "DENTAL_ASSISTANT"],
   DENTIST: [],
-  RECEPTIONIST: [],
-  FINANCE_STAFF: [],
-  CRM_STAFF: [],
+  FRONT_DESK: [],
+  ACCOUNTS: [],
+  DENTAL_ASSISTANT: [],
 };
 
-const permissionSets = Object.fromEntries(
-  Object.entries(ROLE_PERMISSIONS).map(([role, perms]) => [role, new Set<Permission>(perms)]),
-) as Record<Role, Set<Permission>>;
-
-export function hasPermission(role: Role, permission: Permission): boolean {
-  return permissionSets[role]?.has(permission) ?? false;
-}
-
-export function getPermissions(role: Role): Permission[] {
-  return [...(ROLE_PERMISSIONS[role] ?? [])];
+export function isRole(value: string): value is Role {
+  return (ROLES as readonly string[]).includes(value);
 }
 
 export function isPermission(value: string): value is Permission {

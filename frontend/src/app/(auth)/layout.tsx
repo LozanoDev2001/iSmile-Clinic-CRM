@@ -1,70 +1,67 @@
 import type { ReactNode } from "react";
-import { Outfit } from "next/font/google";
 import { ClinicLogo, VendorLogo } from "@/components/shared/brand-logos";
+import { outfit } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
-
-const outfit = Outfit({ subsets: ["latin"], display: "swap" });
 
 /**
  * Split-screen auth shell (login, forgot / reset password).
- * Phones and tablets: logo → card → tagline → footer, centred.
- * Desktop (lg+): tagline on the left, card on the right.
+ * Below lg: logo → card → footer, stacked and centred. lg+: logo, tagline and footer left, card right.
  */
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main
       className={cn(
         outfit.className,
-        "relative isolate flex min-h-dvh flex-1 flex-col overflow-x-hidden bg-[#cbeffa] text-[#0f2a4a]",
+        "auth-bg",
+        "relative isolate flex min-h-dvh flex-1 flex-col items-center gap-4 overflow-x-hidden px-4 pt-[max(22px,env(safe-area-inset-top))] pb-[max(16px,env(safe-area-inset-bottom))] text-[#10305A] sm:justify-center sm:gap-6 sm:px-8 sm:py-10",
+        "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,540px)] lg:items-center lg:gap-12 lg:pt-11 lg:pr-[6vw] lg:pb-10 lg:pl-[4vw]",
       )}
     >
       <AuthBackground />
-      <div className="flex w-full flex-1 flex-col px-4 py-5 sm:px-8 sm:py-6 lg:px-16 xl:px-24">
-        <header className="flex justify-center pt-4 lg:justify-start">
+
+      <section aria-label="About iSmile CRM" className="contents lg:flex lg:min-w-0 lg:flex-col lg:justify-between lg:gap-8 lg:self-stretch">
+        <div className="order-1 lg:order-none lg:self-start">
           <ClinicLogo />
-        </header>
-
-        <div className="grid flex-1 items-center gap-6 py-5 sm:gap-8 sm:py-6 lg:grid-cols-[minmax(0,600px)_400px] lg:justify-between lg:gap-16 xl:grid-cols-[minmax(0,640px)_420px] xl:gap-24">
-          <section className="order-2 text-center lg:order-1 lg:pb-20 lg:text-left">
-            <p className="text-[1.75rem] leading-[1.08] font-semibold tracking-tight sm:text-4xl lg:text-[clamp(2.4rem,3.9vw,3.6rem)]">
-              Every patient answered.
-              <br />
-              Every chair filled.
-            </p>
-            <p className="mx-auto mt-4 max-w-xl text-base text-[#2a4263] sm:mt-5 sm:text-lg lg:mx-0">
-              A simpler way to manage your clinic, team, and patient relationships.
-            </p>
-          </section>
-
-          <div className="order-1 mx-auto w-full max-w-[420px] lg:order-2 lg:mx-0">
-            <div className="rounded-3xl bg-white/75 p-6 shadow-[0_30px_70px_-25px_rgba(15,42,74,0.35)] ring-1 ring-white/80 backdrop-blur-xl sm:p-8">
-              {children}
-            </div>
-            <p className="mt-4 text-center text-sm text-[#2a4263]">Need help? Contact your clinic administrator.</p>
-          </div>
         </div>
-
-        <footer className="flex items-center justify-center gap-3 text-sm text-[#2a4263] lg:justify-start">
+        <div className="hidden flex-col gap-[22px] pl-[2vw] lg:flex">
+          <h1 className="text-[30px] xl:text-[clamp(40px,3.4vw,64px)] leading-[1.08] font-semibold tracking-[-0.025em]">
+            Every patient answered.
+            <br />
+            Every chair filled.
+          </h1>
+          <p className="text-[clamp(16px,1.15vw,22px)] leading-[1.45] text-[#24405F]">
+            A simpler way to manage your clinic, team, and patient relationships.
+          </p>
+        </div>
+        <div className="order-3 inline-flex items-center gap-2.5 text-[13px] sm:text-sm lg:order-none lg:self-start lg:pl-[1vw] lg:text-base">
           Custom CRM by <VendorLogo />
-        </footer>
+        </div>
+      </section>
+
+      <div className="order-2 flex w-full max-w-[540px] min-w-0 flex-col gap-4 sm:gap-[22px] lg:order-none lg:max-w-none">
+        <div className="rounded-[20px] border border-white/90 bg-[linear-gradient(150deg,rgba(255,255,255,.88)_0%,rgba(255,255,255,.72)_100%)] px-5 pt-6 pb-3.5 shadow-[0_30px_70px_rgba(16,48,90,.14),inset_0_1px_0_rgba(255,255,255,.95)] backdrop-blur-[20px] backdrop-saturate-[1.6] max-[359px]:px-4 sm:rounded-3xl sm:px-9 sm:pt-9 sm:pb-5 lg:px-10 lg:pt-[34px] lg:pb-[22px] desk:px-12 desk:pt-11 desk:pb-[26px]">
+          {children}
+        </div>
+        <p className="text-center text-[13px] text-[#24405F] sm:text-sm lg:text-base">Need help? Contact your clinic administrator.</p>
       </div>
     </main>
   );
 }
 
-/** Soft aqua gradient with flowing white waves. Decorative only. */
+/** Animated aqua blobs and soft white waves. Decorative only. */
 function AuthBackground() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-b from-[#c6edfa] via-[#cbeffa] to-[#eefafd]" />
-      <div className="absolute -top-40 -left-40 size-[32rem] rounded-full bg-[#a6e2f5]/60 blur-3xl" />
-      <div className="absolute -bottom-48 left-1/3 size-[38rem] rounded-full bg-[#b7d2ff]/55 blur-3xl" />
-      <div className="absolute top-1/4 -right-40 size-[26rem] rounded-full bg-[#cde9e2]/80 blur-3xl" />
-      <svg className="absolute inset-0 size-full" viewBox="0 0 1440 900" preserveAspectRatio="none" fill="none">
-        <path d="M0 250C260 190 440 320 740 290S1200 170 1440 220V0H0Z" className="fill-white/15" />
-        <path d="M760 0C930 70 1130 100 1440 70V0Z" className="fill-white/35" />
-        <path d="M0 600C280 520 540 680 820 640S1250 540 1440 590V900H0Z" className="fill-white/40" />
-        <path d="M0 730C310 680 580 790 880 760S1270 690 1440 720V900H0Z" className="fill-white/40" />
+      <div className="auth-blob auth-b1" />
+      <div className="auth-blob auth-b2" />
+      <div className="auth-blob auth-b3" />
+      <div className="auth-blob auth-b4" />
+      <svg className="absolute -inset-x-[8%] -inset-y-[4%] h-[108%] w-[116%]" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" fill="none">
+        <path className="auth-wave auth-w1" d="M0 610 C 260 520, 480 700, 760 640 S 1180 470, 1440 560 L 1440 900 L 0 900 Z" fill="#FFFFFF" opacity=".38" />
+        <path className="auth-wave auth-w2" d="M0 700 C 300 640, 520 820, 820 760 S 1220 640, 1440 700 L 1440 900 L 0 900 Z" fill="#FFFFFF" opacity=".42" />
+        <path className="auth-wave auth-w3" d="M520 0 C 640 120, 820 150, 980 90 S 1240 10, 1440 70 L 1440 0 Z" fill="#FFFFFF" opacity=".45" />
+        <path className="auth-wave auth-w4" d="M0 330 C 200 260, 360 380, 560 330 S 900 190, 1100 260" stroke="#FFFFFF" strokeWidth="70" strokeLinecap="round" opacity=".22" />
+        <path className="auth-wave auth-w5" d="M760 900 C 900 760, 1100 720, 1440 780" stroke="#FFFFFF" strokeWidth="40" opacity=".35" />
       </svg>
     </div>
   );

@@ -11,23 +11,29 @@ export type ListPatientsQuery = z.infer<typeof listPatientsQuerySchema>;
 export interface PatientSummary {
   id: string;
   clinicId: string;
-  branchId: string;
-  firstName: string;
-  lastName: string;
+  patientNo: string;
+  /** From the linked `contacts` row. */
+  fullName: string;
   phone: string | null;
   email: string | null;
   primaryDentistId: string | null;
-  updatedAt: Date;
+  status: string;
+  createdAt: Date;
 }
 
 /** Returned only to roles with `patients.medical.read`. */
 export interface PatientMedicalDetail extends PatientSummary {
-  dateOfBirth: Date | null;
-  medicalNotes: string | null;
-  allergies: string | null;
+  dob: Date | null;
+  sex: string | null;
+  medicalAlerts: string | null;
 }
 
 export type PatientDetail = PatientSummary | PatientMedicalDetail;
+
+export interface PatientStats {
+  total: number;
+  createdSince: number;
+}
 
 export interface PatientListResult {
   items: PatientSummary[];

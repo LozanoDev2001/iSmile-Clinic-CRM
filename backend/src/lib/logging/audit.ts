@@ -23,6 +23,11 @@ export const AUDIT_ACTIONS = {
   USER_ACTIVATED: "user.activated",
   USER_DEACTIVATED: "user.deactivated",
   USER_ROLE_CHANGED: "user.role.changed",
+  USER_ACCESS_CHANGED: "user.access.changed",
+  USER_TITLE_CHANGED: "user.title.changed",
+  USER_LOCKED: "user.locked",
+  USER_UNLOCKED: "user.unlocked",
+  SIGN_IN_RULES_UPDATED: "clinic.sign_in_rules.updated",
   PATIENT_CREATED: "patient.created",
   PATIENT_UPDATED: "patient.updated",
   PATIENT_MEDICAL_VIEWED: "patient.medical.viewed",
@@ -39,8 +44,11 @@ export interface AuditEntry {
   resourceType: string;
   resourceId?: string | null;
   actorId?: string | null;
-  clinicId?: string | null;
-  /** Small, non-sensitive facts, e.g. `{ changedFields: ["phone"] }`. */
+  /** Every entry belongs to a clinic (`audit_logs.clinic_id` is required). */
+  clinicId: string;
+  /** Small, non-sensitive facts about the old state, e.g. `{ role: "DENTIST" }`. */
+  before?: Record<string, unknown>;
+  /** Small, non-sensitive facts, e.g. `{ changedFields: ["phone"] }`. Stored as `after_data`. */
   metadata?: Record<string, unknown>;
 }
 
@@ -54,13 +62,13 @@ export async function audit(entry: AuditEntry, tx?: TransactionClient): Promise<
   const { requestId, ipAddress } = await getRequestContext();
   const data = {
     action: entry.action,
-    resourceType: entry.resourceType,
-    resourceId: entry.resourceId ?? null,
+    entityType: entry.resourceType,
+    entityId: entry.resourceId ?? null,
     actorId: entry.actorId ?? null,
-    clinicId: entry.clinicId ?? null,
-    metadata: entry.metadata ? (redact(entry.metadata) as object) : undefined,
-    ipAddress,
-    requestId,
+    clinicId: entry.clinicId,
+    beforeData: entry.before ? (redact(entry.before) as object) : undefined,
+    afterData: entry.metadata ? (redact(entry.metadata) as object) : undefined,
+    ip: ipAddress,
   };
 
   if (tx) {

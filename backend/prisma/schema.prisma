@@ -1,4 +1,6 @@
-// iSmile Clinic CRM — Prisma schema (MySQL)
+// iSmile Clinic CRM — Prisma schema (MySQL / MariaDB).
+// Mirrors 001_initial_schema.mysql.sql; the SQL migrations are the source of truth.
+// Status columns are VARCHAR + CHECK in the database; their allowed values live in TypeScript.
 // Run `npm run db:generate` after every change.
 
 generator client {
@@ -10,168 +12,785 @@ datasource db {
   provider = "mysql"
 }
 
-// ─── Organisation ────────────────────────────────────────────────────────────
-
 model Clinic {
-  id        String   @id @default(cuid())
-  name      String   @db.VarChar(200)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  branches Branch[]
-  users    User[]
-  patients Patient[]
+  id                  String               @id @default(uuid()) @db.Char(36)
+  name                String               @db.VarChar(255)
+  timezone            String               @default("Asia/Manila") @db.VarChar(255)
+  currency            String               @default("PHP") @db.Char(3)
+  settings            Json
+  createdAt           DateTime             @default(now()) @map("created_at")
+  appointmentChairs   AppointmentChair[]
+  appointments        Appointment[]
+  approvalRequests    ApprovalRequest[]
+  auditLogs           AuditLog[]
+  automationRules     AutomationRule[]
+  bankAccounts        BankAccount[]
+  claims              Claim[]
+  clinicalFiles       ClinicalFile[]
+  contacts            Contact[]
+  conversations       Conversation[]
+  encounters          Encounter[]
+  expenseEntries      ExpenseEntry[]
+  integrationAccounts IntegrationAccount[]
+  invoiceVoidRequests InvoiceVoidRequest[]
+  invoices            Invoice[]
+  leadSources         LeadSource[]
+  leads               Lead[]
+  patients            Patient[]
+  payers              Payer[]
+  paymentPlans        PaymentPlan[]
+  payments            Payment[]
+  permissionRequests  PermissionRequest[]
+  roles               Role[]
+  serviceCatalog      Service[]
+  treatmentPlans      TreatmentPlan[]
+  users               User[]
 
   @@map("clinics")
 }
 
-model Branch {
-  id        String   @id @default(cuid())
-  clinicId  String
-  name      String   @db.VarChar(200)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  clinic   Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  users    UserBranch[]
-  patients Patient[]
-
-  @@index([clinicId])
-  @@map("branches")
-}
-
-// ─── Identity & access ───────────────────────────────────────────────────────
-
-enum Role {
-  SUPER_ADMIN
-  CLINIC_ADMIN
-  DENTIST
-  RECEPTIONIST
-  FINANCE_STAFF
-  CRM_STAFF
-}
-
 model User {
-  id           String  @id @default(cuid())
-  email        String  @unique @db.VarChar(254)
-  name         String  @db.VarChar(120)
-  /// Argon2id hash. NULL until an invited user sets their password.
-  passwordHash String? @db.VarChar(255)
-  role         Role
-  /// NULL only for SUPER_ADMIN (system-wide).
-  clinicId     String?
-  isActive     Boolean @default(true)
-  /// Incremented to revoke every issued session (logout everywhere, password
-  /// change/reset, deactivation, role change). Stored in the JWT and compared
-  /// against this value on every authenticated server request.
-  sessionVersion    Int       @default(0)
-  lastLoginAt       DateTime?
-  passwordChangedAt DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                               String                   @id @default(uuid()) @db.Char(36)
+  clinicId                         String                   @map("clinic_id") @db.Char(36)
+  fullName                         String                   @map("full_name") @db.VarChar(255)
+  jobTitle                         String?                  @map("job_title") @db.VarChar(120)
+  email                            String                   @db.VarChar(255)
+  username                         String?                  @db.VarChar(255)
+  staffCode                        String?                  @map("staff_code") @db.VarChar(255)
+  passwordHash                     String?                  @map("password_hash") @db.VarChar(255)
+  status                           String                   @default("active") @db.VarChar(255)
+  dentistCode                      String?                  @map("dentist_code") @db.VarChar(255)
+  createdAt                        DateTime                 @default(now()) @map("created_at")
+  updatedAt                        DateTime                 @default(now()) @updatedAt @map("updated_at")
+  appointmentsAsDentist            Appointment[]            @relation("appointments_dentist_idTousers")
+  appointmentsAsCreatedBy          Appointment[]            @relation("appointments_created_byTousers")
+  approvalRequestsAsRequestedBy    ApprovalRequest[]        @relation("approval_requests_requested_byTousers")
+  approvalRequestsAsDecidedBy      ApprovalRequest[]        @relation("approval_requests_decided_byTousers")
+  auditLogs                        AuditLog[]
+  clinicalFiles                    ClinicalFile[]
+  conversations                    Conversation[]
+  encounters                       Encounter[]
+  invoiceVoidRequestsAsRequestedBy InvoiceVoidRequest[]     @relation("invoice_void_requests_requested_byTousers")
+  invoiceVoidRequestsAsDecidedBy   InvoiceVoidRequest[]     @relation("invoice_void_requests_decided_byTousers")
+  invoices                         Invoice[]
+  leadActivities                   LeadActivity[]
+  leads                            Lead[]
+  messages                         Message[]
+  passwordTokens                   PasswordToken[]
+  patients                         Patient[]
+  payments                         Payment[]
+  permissionRequestsAsRequestedBy  PermissionRequest[]      @relation("permission_requests_requested_byTousers")
+  permissionRequestsAsDecidedBy    PermissionRequest[]      @relation("permission_requests_decided_byTousers")
+  securitySessions                 SecuritySession[]
+  treatmentPlans                   TreatmentPlan[]
+  userPermissionOverrides          UserPermissionOverride[]
+  userRoles                        UserRole[]
+  clinic                           Clinic                   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "users_ibfk_1")
 
-  clinic           Clinic?              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  branches         UserBranch[]
-  passwordTokens   PasswordResetToken[]
-  assignedPatients Patient[]            @relation("PrimaryDentist")
-
-  @@index([clinicId])
+  @@unique([clinicId, email], map: "clinic_id")
+  @@unique([clinicId, staffCode], map: "clinic_id_2")
+  @@index([email])
   @@map("users")
 }
 
-/// Branches a (non clinic-wide) user may access.
-model UserBranch {
-  userId   String
-  branchId String
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@id([userId, branchId])
-  @@index([branchId])
-  @@map("user_branches")
-}
-
-enum PasswordTokenPurpose {
-  RESET
-  INVITE
-}
-
-/// Single-use, time-limited token. Only the SHA-256 hash is stored.
-model PasswordResetToken {
-  id        String               @id @default(cuid())
-  userId    String
-  tokenHash String               @unique @db.Char(64)
-  purpose   PasswordTokenPurpose @default(RESET)
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime             @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("password_reset_tokens")
-}
-
-// ─── Clinical (minimal — extended by the patients module) ────────────────────
-
 model Patient {
-  id               String    @id @default(cuid())
-  clinicId         String
-  branchId         String
-  firstName        String    @db.VarChar(100)
-  lastName         String    @db.VarChar(100)
-  dateOfBirth      DateTime? @db.Date
-  phone            String?   @db.VarChar(32)
-  email            String?   @db.VarChar(254)
-  /// Sensitive — returned only with `patients.medical.read`.
-  medicalNotes     String?   @db.Text
-  /// Sensitive — returned only with `patients.medical.read`.
-  allergies        String?   @db.Text
-  primaryDentistId String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id               String            @id @default(uuid()) @db.Char(36)
+  clinicId         String            @map("clinic_id") @db.Char(36)
+  contactId        String            @unique(map: "contact_id") @map("contact_id") @db.Char(36)
+  patientNo        String            @map("patient_no") @db.VarChar(255)
+  dob              DateTime?         @db.Date
+  sex              String?           @db.VarChar(255)
+  medicalAlerts    String?           @map("medical_alerts") @db.Text
+  primaryDentistId String?           @map("primary_dentist_id") @db.Char(36)
+  status           String            @default("active") @db.VarChar(255)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  appointments     Appointment[]
+  automationJobs   AutomationJob[]
+  clinicalFiles    ClinicalFile[]
+  encounters       Encounter[]
+  invoices         Invoice[]
+  leads            Lead[]
+  patientGuardians PatientGuardian[]
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "patients_ibfk_1")
+  contact          Contact           @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "patients_ibfk_2")
+  primaryDentist   User?             @relation(fields: [primaryDentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_ibfk_3")
+  paymentPlans     PaymentPlan[]
+  payments         Payment[]
+  treatmentPlans   TreatmentPlan[]
 
-  clinic         Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  branch         Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  primaryDentist User?  @relation("PrimaryDentist", fields: [primaryDentistId], references: [id], onDelete: SetNull)
-
-  @@index([clinicId, branchId])
-  @@index([clinicId, lastName, firstName])
-  @@index([primaryDentistId])
+  @@unique([clinicId, patientNo], map: "clinic_id")
+  @@index([primaryDentistId], map: "primary_dentist_id")
   @@map("patients")
 }
 
-// ─── Infrastructure ──────────────────────────────────────────────────────────
-
-/// Append-only. The application never updates or deletes rows; see
-/// scripts/db/audit-log-immutability.sql to enforce this at the database level.
 model AuditLog {
-  id           BigInt   @id @default(autoincrement())
-  actorId      String?  @db.VarChar(32)
-  clinicId     String?  @db.VarChar(32)
-  action       String   @db.VarChar(100)
-  resourceType String   @db.VarChar(50)
-  resourceId   String?  @db.VarChar(64)
-  metadata     Json?
-  ipAddress    String?  @db.VarChar(45)
-  requestId    String?  @db.VarChar(64)
-  createdAt    DateTime @default(now())
+  id         BigInt   @id @default(autoincrement())
+  clinicId   String   @map("clinic_id") @db.Char(36)
+  actorId    String?  @map("actor_id") @db.Char(36)
+  action     String   @db.VarChar(255)
+  entityType String   @map("entity_type") @db.VarChar(255)
+  entityId   String?  @map("entity_id") @db.Char(36)
+  beforeData Json?    @map("before_data")
+  afterData  Json?    @map("after_data")
+  ip         String?  @db.VarChar(45)
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  clinic     Clinic   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "audit_logs_ibfk_1")
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "audit_logs_ibfk_2")
 
-  @@index([clinicId, createdAt])
-  @@index([actorId, createdAt])
-  @@index([resourceType, resourceId])
+  @@index([actorId], map: "actor_id")
+  @@index([clinicId, action, occurredAt], map: "audit_actor_idx")
+  @@index([clinicId, entityType, entityId, occurredAt], map: "audit_entity_idx")
   @@map("audit_logs")
 }
 
-/// Fixed-window rate-limit counters (no Redis required).
 model RateLimit {
-  id      String   @id @db.VarChar(191)
+  id      String   @id
   count   Int
-  resetAt DateTime @db.DateTime(3)
+  resetAt DateTime @map("reset_at")
 
-  @@index([resetAt])
+  @@index([resetAt], map: "rate_limits_reset_idx")
   @@map("rate_limits")
+}
+
+model AppointmentChair {
+  id           String        @id @default(uuid()) @db.Char(36)
+  clinicId     String        @map("clinic_id") @db.Char(36)
+  name         String        @db.VarChar(255)
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "appointment_chairs_ibfk_1")
+  appointments Appointment[]
+
+  @@unique([clinicId, name], map: "clinic_id")
+  @@map("appointment_chairs")
+}
+
+model Appointment {
+  id            String            @id @default(uuid()) @db.Char(36)
+  clinicId      String            @map("clinic_id") @db.Char(36)
+  patientId     String            @map("patient_id") @db.Char(36)
+  dentistId     String?           @map("dentist_id") @db.Char(36)
+  chairId       String?           @map("chair_id") @db.Char(36)
+  serviceId     String?           @map("service_id") @db.Char(36)
+  startsAt      DateTime          @map("starts_at")
+  endsAt        DateTime          @map("ends_at")
+  status        String            @default("booked") @db.VarChar(255)
+  bookingSource String?           @map("booking_source") @db.VarChar(255)
+  notes         String?           @db.Text
+  createdById   String?           @map("created_by") @db.Char(36)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  clinic        Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_1")
+  patient       Patient           @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_2")
+  dentist       User?             @relation("appointments_dentist_idTousers", fields: [dentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "appointments_ibfk_3")
+  chair         AppointmentChair? @relation(fields: [chairId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "appointments_ibfk_4")
+  service       Service?          @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "appointments_ibfk_5")
+  createdBy     User?             @relation("appointments_created_byTousers", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "appointments_ibfk_6")
+  encounters    Encounter[]
+
+  @@index([clinicId, startsAt, dentistId], map: "appointments_calendar_idx")
+  @@index([chairId], map: "chair_id")
+  @@index([createdById], map: "created_by")
+  @@index([dentistId], map: "dentist_id")
+  @@index([patientId], map: "patient_id")
+  @@index([serviceId], map: "service_id")
+  @@map("appointments")
+}
+
+model ApprovalRequest {
+  id            String    @id @default(uuid()) @db.Char(36)
+  clinicId      String    @map("clinic_id") @db.Char(36)
+  requestType   String    @map("request_type") @db.VarChar(255)
+  subjectType   String    @map("subject_type") @db.VarChar(255)
+  subjectId     String?   @map("subject_id") @db.Char(36)
+  payload       Json
+  requestedById String    @map("requested_by") @db.Char(36)
+  status        String    @default("pending") @db.VarChar(255)
+  decidedById   String?   @map("decided_by") @db.Char(36)
+  decidedAt     DateTime? @map("decided_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  clinic        Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "approval_requests_ibfk_1")
+  requestedBy   User      @relation("approval_requests_requested_byTousers", fields: [requestedById], references: [id], onUpdate: Restrict, map: "approval_requests_ibfk_2")
+  decidedBy     User?     @relation("approval_requests_decided_byTousers", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "approval_requests_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([decidedById], map: "decided_by")
+  @@index([requestedById], map: "requested_by")
+  @@map("approval_requests")
+}
+
+model AutomationJob {
+  id           String          @id @default(uuid()) @db.Char(36)
+  ruleId       String?         @map("rule_id") @db.Char(36)
+  patientId    String?         @map("patient_id") @db.Char(36)
+  scheduledFor DateTime        @map("scheduled_for")
+  status       String          @default("pending") @db.VarChar(255)
+  dedupeKey    String          @unique(map: "dedupe_key") @map("dedupe_key") @db.VarChar(255)
+  attempts     Int             @default(0)
+  rule         AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "automation_jobs_ibfk_1")
+  patient      Patient?        @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "automation_jobs_ibfk_2")
+
+  @@index([patientId], map: "patient_id")
+  @@index([ruleId], map: "rule_id")
+  @@map("automation_jobs")
+}
+
+model AutomationRule {
+  id             String          @id @default(uuid()) @db.Char(36)
+  clinicId       String          @map("clinic_id") @db.Char(36)
+  ruleType       String          @map("rule_type") @db.VarChar(255)
+  enabled        Boolean         @default(false)
+  config         Json
+  automationJobs AutomationJob[]
+  clinic         Clinic          @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "automation_rules_ibfk_1")
+
+  @@index([clinicId], map: "clinic_id")
+  @@map("automation_rules")
+}
+
+model BankAccount {
+  id               String            @id @default(uuid()) @db.Char(36)
+  clinicId         String            @map("clinic_id") @db.Char(36)
+  label            String            @db.VarChar(255)
+  lastFour         String?           @map("last_four") @db.VarChar(255)
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "bank_accounts_ibfk_1")
+  bankTransactions BankTransaction[]
+
+  @@index([clinicId], map: "clinic_id")
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id               String      @id @default(uuid()) @db.Char(36)
+  bankAccountId    String      @map("bank_account_id") @db.Char(36)
+  postedOn         DateTime    @map("posted_on") @db.Date
+  amount           Decimal     @db.Decimal(12, 2)
+  description      String?     @db.Text
+  matchedPaymentId String?     @map("matched_payment_id") @db.Char(36)
+  bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id], onUpdate: Restrict, map: "bank_transactions_ibfk_1")
+  matchedPayment   Payment?    @relation(fields: [matchedPaymentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "bank_transactions_ibfk_2")
+
+  @@index([bankAccountId], map: "bank_account_id")
+  @@index([matchedPaymentId], map: "matched_payment_id")
+  @@map("bank_transactions")
+}
+
+model Claim {
+  id             String    @id @default(uuid()) @db.Char(36)
+  clinicId       String    @map("clinic_id") @db.Char(36)
+  invoiceId      String    @map("invoice_id") @db.Char(36)
+  payerId        String    @map("payer_id") @db.Char(36)
+  claimNo        String?   @map("claim_no") @db.VarChar(255)
+  status         String    @default("draft") @db.VarChar(255)
+  submittedAt    DateTime? @map("submitted_at")
+  approvedAmount Decimal?  @map("approved_amount") @db.Decimal(12, 2)
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "claims_ibfk_1")
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "claims_ibfk_2")
+  payer          Payer     @relation(fields: [payerId], references: [id], onUpdate: Restrict, map: "claims_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([invoiceId], map: "invoice_id")
+  @@index([payerId], map: "payer_id")
+  @@map("claims")
+}
+
+model ClinicalFile {
+  id           String     @id @default(uuid()) @db.Char(36)
+  clinicId     String     @map("clinic_id") @db.Char(36)
+  patientId    String     @map("patient_id") @db.Char(36)
+  encounterId  String?    @map("encounter_id") @db.Char(36)
+  objectKey    String     @map("object_key") @db.VarChar(255)
+  mimeType     String     @map("mime_type") @db.VarChar(255)
+  filename     String     @db.VarChar(255)
+  uploadedById String?    @map("uploaded_by") @db.Char(36)
+  uploadedAt   DateTime   @default(now()) @map("uploaded_at")
+  clinic       Clinic     @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "clinical_files_ibfk_1")
+  patient      Patient    @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "clinical_files_ibfk_2")
+  encounter    Encounter? @relation(fields: [encounterId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "clinical_files_ibfk_3")
+  uploadedBy   User?      @relation(fields: [uploadedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "clinical_files_ibfk_4")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([encounterId], map: "encounter_id")
+  @@index([patientId], map: "patient_id")
+  @@index([uploadedById], map: "uploaded_by")
+  @@map("clinical_files")
+}
+
+model Contact {
+  id               String            @id @default(uuid()) @db.Char(36)
+  clinicId         String            @map("clinic_id") @db.Char(36)
+  contactType      String            @map("contact_type") @db.VarChar(255)
+  fullName         String            @map("full_name") @db.VarChar(255)
+  email            String?           @db.VarChar(255)
+  phone            String?           @db.VarChar(255)
+  preferredChannel String?           @map("preferred_channel") @db.VarChar(255)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "contacts_ibfk_1")
+  conversations    Conversation[]
+  leads            Lead[]
+  patientGuardians PatientGuardian[]
+  patient          Patient?
+
+  @@index([clinicId, fullName], map: "contacts_search_idx")
+  @@map("contacts")
+}
+
+model Conversation {
+  id           String    @id @default(uuid()) @db.Char(36)
+  clinicId     String    @map("clinic_id") @db.Char(36)
+  contactId    String    @map("contact_id") @db.Char(36)
+  channel      String    @db.VarChar(255)
+  assignedToId String?   @map("assigned_to") @db.Char(36)
+  status       String    @default("open") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  clinic       Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
+  contact      Contact   @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
+  assignedTo   User?     @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
+  messages     Message[]
+
+  @@index([assignedToId], map: "assigned_to")
+  @@index([clinicId], map: "clinic_id")
+  @@index([contactId], map: "contact_id")
+  @@map("conversations")
+}
+
+model Encounter {
+  id             String          @id @default(uuid()) @db.Char(36)
+  clinicId       String          @map("clinic_id") @db.Char(36)
+  patientId      String          @map("patient_id") @db.Char(36)
+  appointmentId  String?         @map("appointment_id") @db.Char(36)
+  dentistId      String?         @map("dentist_id") @db.Char(36)
+  occurredAt     DateTime        @default(now()) @map("occurred_at")
+  notes          String?         @db.Text
+  diagnosis      String?         @db.Text
+  clinicalFiles  ClinicalFile[]
+  clinic         Clinic          @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "encounters_ibfk_1")
+  patient        Patient         @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "encounters_ibfk_2")
+  appointment    Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "encounters_ibfk_3")
+  dentist        User?           @relation(fields: [dentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "encounters_ibfk_4")
+  treatmentItems TreatmentItem[]
+
+  @@index([appointmentId], map: "appointment_id")
+  @@index([clinicId], map: "clinic_id")
+  @@index([dentistId], map: "dentist_id")
+  @@index([patientId], map: "patient_id")
+  @@map("encounters")
+}
+
+model ExpenseEntry {
+  id          String   @id @default(uuid()) @db.Char(36)
+  clinicId    String   @map("clinic_id") @db.Char(36)
+  category    String   @db.VarChar(255)
+  amount      Decimal  @db.Decimal(12, 2)
+  incurredOn  DateTime @map("incurred_on") @db.Date
+  description String?  @db.Text
+  clinic      Clinic   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "expense_entries_ibfk_1")
+
+  @@index([clinicId], map: "clinic_id")
+  @@map("expense_entries")
+}
+
+model IntegrationAccount {
+  id                  String  @id @default(uuid()) @db.Char(36)
+  clinicId            String  @map("clinic_id") @db.Char(36)
+  provider            String  @db.VarChar(255)
+  config              Json
+  credentialSecretRef String? @map("credential_secret_ref") @db.VarChar(255)
+  status              String  @default("inactive") @db.VarChar(255)
+  clinic              Clinic  @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "integration_accounts_ibfk_1")
+
+  @@index([clinicId], map: "clinic_id")
+  @@map("integration_accounts")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid()) @db.Char(36)
+  invoiceId   String   @map("invoice_id") @db.Char(36)
+  serviceId   String?  @map("service_id") @db.Char(36)
+  description String   @db.Text
+  qty         Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
+  taxType     String   @map("tax_type") @db.VarChar(255)
+  lineTotal   Decimal  @map("line_total") @db.Decimal(12, 2)
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "invoice_items_ibfk_1")
+  service     Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoice_items_ibfk_2")
+
+  @@index([invoiceId], map: "invoice_id")
+  @@index([serviceId], map: "service_id")
+  @@map("invoice_items")
+}
+
+model InvoiceVoidRequest {
+  id            String    @id @default(uuid()) @db.Char(36)
+  clinicId      String    @map("clinic_id") @db.Char(36)
+  invoiceId     String    @map("invoice_id") @db.Char(36)
+  requestedById String    @map("requested_by") @db.Char(36)
+  reason        String    @db.Text
+  status        String    @default("pending") @db.VarChar(255)
+  decidedById   String?   @map("decided_by") @db.Char(36)
+  decidedAt     DateTime? @map("decided_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  clinic        Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "invoice_void_requests_ibfk_1")
+  invoice       Invoice   @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "invoice_void_requests_ibfk_2")
+  requestedBy   User      @relation("invoice_void_requests_requested_byTousers", fields: [requestedById], references: [id], onUpdate: Restrict, map: "invoice_void_requests_ibfk_3")
+  decidedBy     User?     @relation("invoice_void_requests_decided_byTousers", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoice_void_requests_ibfk_4")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([decidedById], map: "decided_by")
+  @@index([invoiceId], map: "invoice_id")
+  @@index([requestedById], map: "requested_by")
+  @@map("invoice_void_requests")
+}
+
+model Invoice {
+  id                  String               @id @default(uuid()) @db.Char(36)
+  clinicId            String               @map("clinic_id") @db.Char(36)
+  patientId           String               @map("patient_id") @db.Char(36)
+  payerId             String?              @map("payer_id") @db.Char(36)
+  number              String               @db.VarChar(255)
+  issuedAt            DateTime             @default(now()) @map("issued_at")
+  status              String               @default("draft") @db.VarChar(255)
+  subtotal            Decimal              @default(0.00) @db.Decimal(12, 2)
+  taxTotal            Decimal              @default(0.00) @map("tax_total") @db.Decimal(12, 2)
+  grandTotal          Decimal              @default(0.00) @map("grand_total") @db.Decimal(12, 2)
+  createdById         String?              @map("created_by") @db.Char(36)
+  claims              Claim[]
+  invoiceItems        InvoiceItem[]
+  invoiceVoidRequests InvoiceVoidRequest[]
+  clinic              Clinic               @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "invoices_ibfk_1")
+  patient             Patient              @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "invoices_ibfk_2")
+  payer               Payer?               @relation(fields: [payerId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoices_ibfk_3")
+  createdBy           User?                @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoices_ibfk_4")
+  paymentAllocations  PaymentAllocation[]
+  paymentPlans        PaymentPlan[]
+
+  @@unique([clinicId, number], map: "clinic_id")
+  @@index([createdById], map: "created_by")
+  @@index([clinicId, patientId, issuedAt], map: "invoice_patient_idx")
+  @@index([patientId], map: "patient_id")
+  @@index([payerId], map: "payer_id")
+  @@map("invoices")
+}
+
+model LeadActivity {
+  id           String   @id @default(uuid()) @db.Char(36)
+  leadId       String   @map("lead_id") @db.Char(36)
+  actorId      String?  @map("actor_id") @db.Char(36)
+  activityType String   @map("activity_type") @db.VarChar(255)
+  content      String?  @db.Text
+  occurredAt   DateTime @default(now()) @map("occurred_at")
+  lead         Lead     @relation(fields: [leadId], references: [id], onUpdate: Restrict, map: "lead_activities_ibfk_1")
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "lead_activities_ibfk_2")
+
+  @@index([actorId], map: "actor_id")
+  @@index([leadId], map: "lead_id")
+  @@map("lead_activities")
+}
+
+model LeadSource {
+  id       String @id @default(uuid()) @db.Char(36)
+  clinicId String @map("clinic_id") @db.Char(36)
+  name     String @db.VarChar(255)
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "lead_sources_ibfk_1")
+  leads    Lead[]
+
+  @@unique([clinicId, name], map: "clinic_id")
+  @@map("lead_sources")
+}
+
+model Lead {
+  id                  String         @id @default(uuid()) @db.Char(36)
+  clinicId            String         @map("clinic_id") @db.Char(36)
+  contactId           String         @map("contact_id") @db.Char(36)
+  sourceId            String?        @map("source_id") @db.Char(36)
+  assignedToId        String?        @map("assigned_to") @db.Char(36)
+  stage               String         @default("new") @db.VarChar(255)
+  interestedServiceId String?        @map("interested_service_id") @db.Char(36)
+  convertedPatientId  String?        @map("converted_patient_id") @db.Char(36)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  convertedAt         DateTime?      @map("converted_at")
+  leadActivities      LeadActivity[]
+  clinic              Clinic         @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "leads_ibfk_1")
+  contact             Contact        @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "leads_ibfk_2")
+  source              LeadSource?    @relation(fields: [sourceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_3")
+  assignedTo          User?          @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_4")
+  convertedPatient    Patient?       @relation(fields: [convertedPatientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_5")
+  interestedService   Service?       @relation(fields: [interestedServiceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_interested_service_fkey")
+
+  @@index([assignedToId], map: "assigned_to")
+  @@index([clinicId], map: "clinic_id")
+  @@index([contactId], map: "contact_id")
+  @@index([convertedPatientId], map: "converted_patient_id")
+  @@index([interestedServiceId], map: "leads_interested_service_fkey")
+  @@index([sourceId], map: "source_id")
+  @@map("leads")
+}
+
+model Message {
+  id                String       @id @default(uuid()) @db.Char(36)
+  conversationId    String       @map("conversation_id") @db.Char(36)
+  direction         String       @db.VarChar(255)
+  senderUserId      String?      @map("sender_user_id") @db.Char(36)
+  body              String?      @db.Text
+  providerMessageId String?      @map("provider_message_id") @db.VarChar(255)
+  sentAt            DateTime     @default(now()) @map("sent_at")
+  deliveryStatus    String?      @map("delivery_status") @db.VarChar(255)
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onUpdate: Restrict, map: "messages_ibfk_1")
+  senderUser        User?        @relation(fields: [senderUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "messages_ibfk_2")
+
+  @@index([conversationId], map: "conversation_id")
+  @@index([senderUserId], map: "sender_user_id")
+  @@map("messages")
+}
+
+model PasswordToken {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  tokenHash String    @unique(map: "token_hash") @map("token_hash") @db.Char(64)
+  purpose   String    @db.VarChar(20)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "password_tokens_ibfk_1")
+
+  @@index([userId, purpose], map: "password_tokens_user_idx")
+  @@map("password_tokens")
+}
+
+model PatientGuardian {
+  patientId         String  @map("patient_id") @db.Char(36)
+  guardianContactId String  @map("guardian_contact_id") @db.Char(36)
+  relationship      String? @db.VarChar(255)
+  isPrimary         Boolean @default(false) @map("is_primary")
+  patient           Patient @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "patient_guardians_ibfk_1")
+  guardianContact   Contact @relation(fields: [guardianContactId], references: [id], onUpdate: Restrict, map: "patient_guardians_ibfk_2")
+
+  @@id([patientId, guardianContactId])
+  @@index([guardianContactId], map: "guardian_contact_id")
+  @@map("patient_guardians")
+}
+
+model Payer {
+  id        String    @id @default(uuid()) @db.Char(36)
+  clinicId  String    @map("clinic_id") @db.Char(36)
+  name      String    @db.VarChar(255)
+  payerType String    @map("payer_type") @db.VarChar(255)
+  claims    Claim[]
+  invoices  Invoice[]
+  clinic    Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payers_ibfk_1")
+
+  @@index([clinicId], map: "clinic_id")
+  @@map("payers")
+}
+
+model PaymentAllocation {
+  id        String  @id @default(uuid()) @db.Char(36)
+  paymentId String  @map("payment_id") @db.Char(36)
+  invoiceId String  @map("invoice_id") @db.Char(36)
+  amount    Decimal @db.Decimal(12, 2)
+  payment   Payment @relation(fields: [paymentId], references: [id], onUpdate: Restrict, map: "payment_allocations_ibfk_1")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "payment_allocations_ibfk_2")
+
+  @@unique([paymentId, invoiceId], map: "payment_id")
+  @@index([invoiceId], map: "invoice_id")
+  @@map("payment_allocations")
+}
+
+model PaymentInstallment {
+  id     String      @id @default(uuid()) @db.Char(36)
+  planId String      @map("plan_id") @db.Char(36)
+  dueOn  DateTime    @map("due_on") @db.Date
+  amount Decimal     @db.Decimal(12, 2)
+  status String      @default("due") @db.VarChar(255)
+  plan   PaymentPlan @relation(fields: [planId], references: [id], onUpdate: Restrict, map: "payment_installments_ibfk_1")
+
+  @@index([planId], map: "plan_id")
+  @@map("payment_installments")
+}
+
+model PaymentPlan {
+  id                  String               @id @default(uuid()) @db.Char(36)
+  clinicId            String               @map("clinic_id") @db.Char(36)
+  patientId           String               @map("patient_id") @db.Char(36)
+  invoiceId           String?              @map("invoice_id") @db.Char(36)
+  status              String               @default("active") @db.VarChar(255)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  paymentInstallments PaymentInstallment[]
+  clinic              Clinic               @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payment_plans_ibfk_1")
+  patient             Patient              @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "payment_plans_ibfk_2")
+  invoice             Invoice?             @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_plans_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([invoiceId], map: "invoice_id")
+  @@index([patientId], map: "patient_id")
+  @@map("payment_plans")
+}
+
+model Payment {
+  id                 String              @id @default(uuid()) @db.Char(36)
+  clinicId           String              @map("clinic_id") @db.Char(36)
+  patientId          String?             @map("patient_id") @db.Char(36)
+  amount             Decimal             @db.Decimal(12, 2)
+  method             String              @db.VarChar(255)
+  reference          String?             @db.VarChar(255)
+  receivedAt         DateTime            @default(now()) @map("received_at")
+  status             String              @default("posted") @db.VarChar(255)
+  recordedById       String?             @map("recorded_by") @db.Char(36)
+  bankTransactions   BankTransaction[]
+  paymentAllocations PaymentAllocation[]
+  clinic             Clinic              @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payments_ibfk_1")
+  patient            Patient?            @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_2")
+  recordedBy         User?               @relation(fields: [recordedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([patientId], map: "patient_id")
+  @@index([recordedById], map: "recorded_by")
+  @@map("payments")
+}
+
+model PermissionRequest {
+  id            String    @id @default(uuid()) @db.Char(36)
+  clinicId      String    @map("clinic_id") @db.Char(36)
+  requestedById String    @map("requested_by") @db.Char(36)
+  resource      String    @db.VarChar(255)
+  action        String    @default("read") @db.VarChar(255)
+  tabCode       String?   @map("tab_code") @db.VarChar(255)
+  justification String?   @db.Text
+  status        String    @default("pending") @db.VarChar(255)
+  decidedById   String?   @map("decided_by") @db.Char(36)
+  decidedAt     DateTime? @map("decided_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  clinic        Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "permission_requests_ibfk_1")
+  requestedBy   User      @relation("permission_requests_requested_byTousers", fields: [requestedById], references: [id], onUpdate: Restrict, map: "permission_requests_ibfk_2")
+  decidedBy     User?     @relation("permission_requests_decided_byTousers", fields: [decidedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "permission_requests_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([decidedById], map: "decided_by")
+  @@index([requestedById], map: "requested_by")
+  @@map("permission_requests")
+}
+
+model Permission {
+  id                      String                   @id @default(uuid()) @db.Char(36)
+  resource                String                   @db.VarChar(255)
+  action                  String                   @db.VarChar(255)
+  rolePermissions         RolePermission[]
+  userPermissionOverrides UserPermissionOverride[]
+
+  @@unique([resource, action], map: "resource")
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Char(36)
+  permissionId String     @map("permission_id") @db.Char(36)
+  role         Role       @relation(fields: [roleId], references: [id], onUpdate: Restrict, map: "role_permissions_ibfk_1")
+  permission   Permission @relation(fields: [permissionId], references: [id], onUpdate: Restrict, map: "role_permissions_ibfk_2")
+
+  @@id([roleId, permissionId])
+  @@index([permissionId], map: "permission_id")
+  @@map("role_permissions")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Char(36)
+  clinicId        String?          @map("clinic_id") @db.Char(36)
+  code            String           @db.VarChar(255)
+  name            String           @db.VarChar(255)
+  rolePermissions RolePermission[]
+  clinic          Clinic?          @relation(fields: [clinicId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "roles_ibfk_1")
+  userRoles       UserRole[]
+
+  @@unique([clinicId, code], map: "clinic_id")
+  @@map("roles")
+}
+
+model SecuritySession {
+  id               String    @id @default(uuid()) @db.Char(36)
+  userId           String    @map("user_id") @db.Char(36)
+  refreshTokenHash String    @map("refresh_token_hash") @db.VarChar(255)
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  user             User      @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "security_sessions_ibfk_1")
+
+  @@index([userId, revokedAt], map: "security_sessions_user_idx")
+  @@map("security_sessions")
+}
+
+model Service {
+  id              String          @id @default(uuid()) @db.Char(36)
+  clinicId        String          @map("clinic_id") @db.Char(36)
+  code            String          @db.VarChar(255)
+  name            String          @db.VarChar(255)
+  price           Decimal         @db.Decimal(12, 2)
+  durationMinutes Int?            @map("duration_minutes")
+  taxType         String          @default("exempt") @map("tax_type") @db.VarChar(255)
+  active          Boolean         @default(true)
+  appointments    Appointment[]
+  invoiceItems    InvoiceItem[]
+  leads           Lead[]
+  clinic          Clinic          @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "service_catalog_ibfk_1")
+  treatmentItems  TreatmentItem[]
+
+  @@unique([clinicId, code], map: "clinic_id")
+  @@map("service_catalog")
+}
+
+model TreatmentItem {
+  id              String        @id @default(uuid()) @db.Char(36)
+  planId          String        @map("plan_id") @db.Char(36)
+  serviceId       String        @map("service_id") @db.Char(36)
+  toothCode       String?       @map("tooth_code") @db.VarChar(255)
+  qty             Decimal       @default(1.00) @db.Decimal(10, 2)
+  quotedUnitPrice Decimal       @map("quoted_unit_price") @db.Decimal(12, 2)
+  status          String        @default("planned") @db.VarChar(255)
+  encounterId     String?       @map("encounter_id") @db.Char(36)
+  plan            TreatmentPlan @relation(fields: [planId], references: [id], onUpdate: Restrict, map: "treatment_items_ibfk_1")
+  service         Service       @relation(fields: [serviceId], references: [id], onUpdate: Restrict, map: "treatment_items_ibfk_2")
+  encounter       Encounter?    @relation(fields: [encounterId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "treatment_items_ibfk_3")
+
+  @@index([encounterId], map: "encounter_id")
+  @@index([planId], map: "plan_id")
+  @@index([serviceId], map: "service_id")
+  @@map("treatment_items")
+}
+
+model TreatmentPlan {
+  id             String          @id @default(uuid()) @db.Char(36)
+  clinicId       String          @map("clinic_id") @db.Char(36)
+  patientId      String          @map("patient_id") @db.Char(36)
+  dentistId      String?         @map("dentist_id") @db.Char(36)
+  status         String          @default("draft") @db.VarChar(255)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  treatmentItems TreatmentItem[]
+  clinic         Clinic          @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "treatment_plans_ibfk_1")
+  patient        Patient         @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "treatment_plans_ibfk_2")
+  dentist        User?           @relation(fields: [dentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "treatment_plans_ibfk_3")
+
+  @@index([clinicId], map: "clinic_id")
+  @@index([dentistId], map: "dentist_id")
+  @@index([patientId], map: "patient_id")
+  @@map("treatment_plans")
+}
+
+model UserPermissionOverride {
+  userId       String     @map("user_id") @db.Char(36)
+  permissionId String     @map("permission_id") @db.Char(36)
+  decision     String     @db.VarChar(255)
+  user         User       @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "user_permission_overrides_ibfk_1")
+  permission   Permission @relation(fields: [permissionId], references: [id], onUpdate: Restrict, map: "user_permission_overrides_ibfk_2")
+
+  @@id([userId, permissionId])
+  @@index([permissionId], map: "permission_id")
+  @@map("user_permission_overrides")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Char(36)
+  roleId String @map("role_id") @db.Char(36)
+  user   User   @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "user_roles_ibfk_1")
+  role   Role   @relation(fields: [roleId], references: [id], onUpdate: Restrict, map: "user_roles_ibfk_2")
+
+  @@id([userId, roleId])
+  @@index([roleId], map: "role_id")
+  @@map("user_roles")
 }

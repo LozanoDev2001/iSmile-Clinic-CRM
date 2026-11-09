@@ -1,86 +1,46 @@
 import "server-only";
 import { ASSIGNABLE_ROLES } from "@backend/config/permissions";
+import { authRepository } from "@backend/features/auth/auth.repository";
 import { createInviteToken, sendInviteEmail } from "@backend/features/auth/password-reset.service";
-import {
-  assertClinicAccess,
-  assertPermission,
-  isClinicWide,
-  resolveClinicId,
-  type AuthUser,
-} from "@backend/lib/authorization";
+import { assertPermission, type AuthUser } from "@backend/lib/authorization";
 import { Errors } from "@backend/lib/errors/app-error";
 import { AUDIT_ACTIONS, audit } from "@backend/lib/logging/audit";
 import { logger } from "@backend/lib/logging/logger";
 import { prisma } from "@backend/lib/prisma";
+import { loadEditableMember } from "./team.service";
 import { inviteUserSchema, setUserActiveSchema } from "./user.schema";
 import { usersRepository } from "./users.repository";
-import type {
-  InviteOptions,
-  InviteUserInput,
-  InviteUserResult,
-  SetUserActiveInput,
-  UserListItem,
-  UserListResult,
-} from "./users.types";
+import type { InviteOptions, InviteUserInput, InviteUserResult, SetUserActiveInput } from "./users.types";
 
-const PAGE_SIZE = 50;
-
-export async function listUsers(actor: AuthUser, page = 1): Promise<UserListResult> {
-  assertPermission(actor, "users.read");
-  const safePage = Math.max(1, Math.floor(page) || 1);
-  const clinicId = actor.role === "SUPER_ADMIN" ? undefined : resolveClinicId(actor);
-  const [items, total] = await usersRepository.list(clinicId, { skip: (safePage - 1) * PAGE_SIZE, take: PAGE_SIZE });
-  return { items, total, page: safePage, pageSize: PAGE_SIZE };
-}
-
-/** Roles, clinics and branches the actor may choose from when inviting. */
-export async function getInviteOptions(actor: AuthUser): Promise<InviteOptions> {
+/** Roles the actor may choose from when inviting. */
+export function getInviteOptions(actor: AuthUser): InviteOptions {
   assertPermission(actor, "users.create");
-  const isSuper = actor.role === "SUPER_ADMIN";
-  const [clinics, branches] = await Promise.all([
-    isSuper ? usersRepository.listClinics() : Promise.resolve([]),
-    usersRepository.listBranches(isSuper ? undefined : resolveClinicId(actor)),
-  ]);
-  return { roles: [...ASSIGNABLE_ROLES[actor.role]], clinics, branches, chooseClinic: isSuper };
+  return { roles: [...ASSIGNABLE_ROLES[actor.role]] };
 }
 
 /**
- * Creates an account and emails a single-use link to set the password.
- * There is no public sign-up: only users with `users.create` can do this.
+ * Creates an invited account in the actor's clinic and emails a single-use
+ * link to set the password. There is no public sign-up.
  */
-export async function inviteUser(
-  actor: AuthUser,
-  input: InviteUserInput,
-): Promise<InviteUserResult & { user: UserListItem }> {
+export async function inviteUser(actor: AuthUser, input: InviteUserInput): Promise<InviteUserResult & { userId: string }> {
   assertPermission(actor, "users.create");
   const data = inviteUserSchema.parse(input);
-
-  if (!ASSIGNABLE_ROLES[actor.role].includes(data.role)) {
-    throw Errors.forbidden("You cannot assign this role.");
-  }
-
-  const clinicId = data.role === "SUPER_ADMIN" ? null : resolveClinicId(actor, data.clinicId);
-  const branchIds = clinicId && !isClinicWide({ role: data.role }) ? [...new Set(data.branchIds)] : [];
-
-  if (clinicId && !isClinicWide({ role: data.role })) {
-    if (!branchIds.length) throw Errors.validation({ branchIds: ["Assign at least one branch"] });
-    // Never trust client-supplied branch IDs: they must belong to this clinic.
-    const valid = await usersRepository.countBranchesInClinic(clinicId, branchIds);
-    if (valid !== branchIds.length) throw Errors.validation({ branchIds: ["One or more branches are invalid"] });
+  if (!ASSIGNABLE_ROLES[actor.role].includes(data.role)) throw Errors.forbidden("You cannot assign this role.");
+  if (await usersRepository.emailTaken(actor.clinicId, data.email)) {
+    throw Errors.validation({ email: ["Someone in this clinic already uses this email"] });
   }
 
   const { user, token } = await prisma.$transaction(async (tx) => {
-    const user = await usersRepository.create({ ...data, clinicId, branchIds }, tx);
+    const role = await usersRepository.findSystemRole(data.role, tx);
+    if (!role) throw new Error(`System role ${data.role} is missing; re-run the seed.`);
+    // Invited users start from their role template; overrides are added later in Settings.
+    const user = await usersRepository.create(
+      { clinicId: actor.clinicId, fullName: data.name, email: data.email, jobTitle: data.jobTitle, roleId: role.id },
+      tx,
+    );
     const token = await createInviteToken(user.id, tx);
     await audit(
-      {
-        action: AUDIT_ACTIONS.USER_INVITED,
-        resourceType: "user",
-        resourceId: user.id,
-        actorId: actor.id,
-        clinicId,
-        metadata: { role: data.role, branchCount: branchIds.length },
-      },
+      { action: AUDIT_ACTIONS.USER_INVITED, resourceType: "user", resourceId: user.id, actorId: actor.id, clinicId: actor.clinicId, metadata: { role: data.role } },
       tx,
     );
     return { user, token };
@@ -88,28 +48,22 @@ export async function inviteUser(
 
   let emailSent = true;
   try {
-    await sendInviteEmail(user, token);
+    await sendInviteEmail({ email: user.email, name: user.fullName }, token);
   } catch (error) {
     emailSent = false;
     logger.error("Invitation email failed", { userId: user.id, error });
   }
-  return { user, emailSent };
+  return { userId: user.id, emailSent };
 }
 
-export async function setUserActive(actor: AuthUser, input: SetUserActiveInput): Promise<UserListItem> {
-  assertPermission(actor, "users.update");
+/** Deactivating ends every session; reactivating restores "invited" if no password was ever set. */
+export async function setUserActive(actor: AuthUser, input: SetUserActiveInput): Promise<void> {
   const { userId, active } = setUserActiveSchema.parse(input);
+  const target = await loadEditableMember(actor, userId);
 
-  if (userId === actor.id) throw Errors.forbidden("You cannot change the status of your own account.");
-
-  const target = await usersRepository.findForAdmin(userId);
-  if (!target) throw Errors.notFound("user");
-  if (target.role === "SUPER_ADMIN" && actor.role !== "SUPER_ADMIN") throw Errors.forbidden();
-  if (target.clinicId) assertClinicAccess(actor, target.clinicId);
-  else if (actor.role !== "SUPER_ADMIN") throw Errors.forbidden();
-
-  return prisma.$transaction(async (tx) => {
-    const updated = await usersRepository.setActive(userId, active, tx);
+  await prisma.$transaction(async (tx) => {
+    await usersRepository.setStatus(userId, active ? (target.hasPassword ? "active" : "invited") : "disabled", tx);
+    if (!active) await authRepository.revokeUserSessions(userId, tx);
     await audit(
       {
         action: active ? AUDIT_ACTIONS.USER_ACTIVATED : AUDIT_ACTIONS.USER_DEACTIVATED,
@@ -117,9 +71,9 @@ export async function setUserActive(actor: AuthUser, input: SetUserActiveInput):
         resourceId: userId,
         actorId: actor.id,
         clinicId: target.clinicId,
+        before: { status: target.status },
       },
       tx,
     );
-    return updated;
   });
 }

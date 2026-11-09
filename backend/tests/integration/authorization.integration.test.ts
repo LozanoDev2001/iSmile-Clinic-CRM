@@ -1,57 +1,69 @@
 /**
- * Clinic / branch / record isolation against a real MySQL database.
+ * Clinic / record isolation and session revocation against a real database.
  * Requires DATABASE_URL_TEST. Skipped otherwise.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Role } from "@backend/config/permissions";
 import { resetDatabase, connectTestDatabase } from "../helpers/db";
 
 const enabled = connectTestDatabase();
-const session = vi.hoisted(() => ({ current: null as null | { user: { id: string; role: string }; sessionVersion: number } }));
+const session = vi.hoisted(() => ({ current: null as null | { user: { id: string; role: string }; sessionId: string; sessionSecret: string } }));
 vi.mock("@backend/lib/auth", () => ({ auth: async () => session.current }));
 vi.mock("@backend/lib/email/mailer", () => ({ sendEmail: vi.fn() }));
 
-describe.skipIf(!enabled)("authorization against MySQL", async () => {
+describe.skipIf(!enabled)("authorization against the database", async () => {
   const { prisma } = await import("@backend/lib/prisma");
   const authz = await import("@backend/lib/authorization");
+  const { startSession } = await import("@backend/features/auth/auth.service");
   const patients = await import("@backend/features/patients/patients.service");
   const users = await import("@backend/features/users/users.service");
+  const team = await import("@backend/features/users/team.service");
 
   const ids: Record<string, string> = {};
+  let roleIds: Map<Role, string>;
 
+  /** Signs in through a real security_sessions row. */
   async function signInAs(key: string) {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: ids[key] } });
-    session.current = { user: { id: user.id, role: user.role }, sessionVersion: user.sessionVersion };
+    const started = await startSession(ids[key], false);
+    session.current = { user: { id: ids[key], role: "x" }, ...started };
     return authz.requireAuth();
   }
 
   beforeAll(async () => {
-    await resetDatabase(prisma);
-    const a = await prisma.clinic.create({ data: { name: "Clinic A" } });
-    const b = await prisma.clinic.create({ data: { name: "Clinic B" } });
-    const a1 = await prisma.branch.create({ data: { name: "A1", clinicId: a.id } });
-    const a2 = await prisma.branch.create({ data: { name: "A2", clinicId: a.id } });
-    const b1 = await prisma.branch.create({ data: { name: "B1", clinicId: b.id } });
-    Object.assign(ids, { clinicA: a.id, clinicB: b.id, a1: a1.id, a2: a2.id, b1: b1.id });
+    roleIds = await resetDatabase(prisma);
+    const settings = { signIn: { lockAfterFailedLogins: true, idleSignOut: false } };
+    const a = await prisma.clinic.create({ data: { name: "Clinic A", settings } });
+    const b = await prisma.clinic.create({ data: { name: "Clinic B", settings } });
+    Object.assign(ids, { clinicA: a.id, clinicB: b.id });
 
-    const mk = (key: string, role: "CLINIC_ADMIN" | "DENTIST" | "RECEPTIONIST", clinicId: string, branchIds: string[] = []) =>
+    const mk = (key: string, role: Role, clinicId: string) =>
       prisma.user
         .create({
-          data: { email: `${key.toLowerCase()}@ismile.test`, name: key, role, clinicId, branches: { create: branchIds.map((branchId) => ({ branchId })) } },
+          data: {
+            email: `${key.toLowerCase()}@ismile.test`,
+            fullName: key,
+            status: "active",
+            passwordHash: "unused",
+            clinicId,
+            userRoles: { create: { roleId: roleIds.get(role)! } },
+          },
         })
         .then((u) => (ids[key] = u.id));
-    await mk("adminA", "CLINIC_ADMIN", a.id);
-    await mk("adminB", "CLINIC_ADMIN", b.id);
-    await mk("dentistA", "DENTIST", a.id, [a1.id]);
-    await mk("receptionA", "RECEPTIONIST", a.id, [a1.id]);
+    await mk("ownerA", "OWNER", a.id);
+    await mk("ownerB", "OWNER", b.id);
+    await mk("dentistA", "DENTIST", a.id);
+    await mk("frontDeskA", "FRONT_DESK", a.id);
 
-    const p = (key: string, clinicId: string, branchId: string, primaryDentistId?: string) =>
-      prisma.patient
-        .create({ data: { clinicId, branchId, firstName: key, lastName: "Test", allergies: "Latex", medicalNotes: "Sensitive", primaryDentistId } })
+    const p = (key: string, clinicId: string, primaryDentistId?: string) =>
+      prisma.contact
+        .create({ data: { clinicId, contactType: "patient", fullName: key } })
+        .then((c) =>
+          prisma.patient.create({ data: { clinicId, contactId: c.id, patientNo: key, medicalAlerts: "Latex", primaryDentistId } }),
+        )
         .then((x) => (ids[key] = x.id));
-    await p("pA1assigned", a.id, a1.id, ids.dentistA);
-    await p("pA1", a.id, a1.id);
-    await p("pA2", a.id, a2.id);
-    await p("pB1", b.id, b1.id);
+    await p("pA-assigned", a.id, ids.dentistA);
+    await p("pA", a.id);
+    await p("pB", b.id);
   });
 
   afterAll(async () => {
@@ -66,76 +78,75 @@ describe.skipIf(!enabled)("authorization against MySQL", async () => {
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("limits patient lists by clinic, branch and assignment", async () => {
-    const names = async (key: string) =>
-      (await patients.listPatients(await signInAs(key), {})).items.map((x) => x.firstName).sort();
-    expect(await names("adminA")).toEqual(["pA1", "pA1assigned", "pA2"]);
-    expect(await names("adminB")).toEqual(["pB1"]);
-    expect(await names("receptionA")).toEqual(["pA1", "pA1assigned"]);
-    expect(await names("dentistA")).toEqual(["pA1assigned"]);
+  it("limits patient lists by clinic and assignment", async () => {
+    const names = async (key: string) => (await patients.listPatients(await signInAs(key), {})).items.map((x) => x.fullName).sort();
+    expect(await names("ownerA")).toEqual(["pA", "pA-assigned"]);
+    expect(await names("ownerB")).toEqual(["pB"]);
+    expect(await names("frontDeskA")).toEqual(["pA", "pA-assigned"]);
+    expect(await names("dentistA")).toEqual(["pA-assigned"]);
   });
 
   it("never returns another clinic's patient", async () => {
-    const admin = await signInAs("adminA");
-    await expect(patients.getPatient(admin, ids.pB1)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const owner = await signInAs("ownerA");
+    await expect(patients.getPatient(owner, ids.pB)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("returns medical fields only with patients.medical.read, and audits the read", async () => {
-    const reception = await signInAs("receptionA");
-    const basic = await patients.getPatient(reception, ids.pA1assigned);
-    expect(basic).not.toHaveProperty("allergies");
-    expect(basic).not.toHaveProperty("medicalNotes");
+    const frontDesk = await signInAs("frontDeskA");
+    const basic = await patients.getPatient(frontDesk, ids["pA-assigned"]);
+    expect(basic).not.toHaveProperty("medicalAlerts");
 
     const dentist = await signInAs("dentistA");
-    const full = await patients.getPatient(dentist, ids.pA1assigned);
-    expect(full).toMatchObject({ allergies: "Latex" });
-    expect(await prisma.auditLog.count({ where: { action: "patient.medical.viewed", resourceId: ids.pA1assigned } })).toBe(1);
+    const full = await patients.getPatient(dentist, ids["pA-assigned"]);
+    expect(full).toMatchObject({ medicalAlerts: "Latex" });
+    expect(await prisma.auditLog.count({ where: { action: "patient.medical.viewed", entityId: ids["pA-assigned"] } })).toBe(1);
     // ...but not for a patient not assigned to them.
-    await expect(patients.getPatient(dentist, ids.pA1)).rejects.toMatchObject({ code: "NOT_FOUND" });
-  });
-
-  it("enforces branch access", async () => {
-    await signInAs("receptionA");
-    await expect(authz.requireBranchAccess(ids.a1)).resolves.toBeTruthy();
-    await expect(authz.requireBranchAccess(ids.a2)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await signInAs("adminA");
-    await expect(authz.requireBranchAccess(ids.a2)).resolves.toBeTruthy();
-    await expect(authz.requireBranchAccess(ids.b1)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(patients.getPatient(dentist, ids.pA)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("blocks cross-clinic user administration", async () => {
-    const adminB = await signInAs("adminB");
-    await expect(users.setUserActive(adminB, { userId: ids.receptionA, active: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const ownerB = await signInAs("ownerB");
+    await expect(users.setUserActive(ownerB, { userId: ids.frontDeskA, active: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("applies a saved window override on the next request", async () => {
+    const owner = await signInAs("ownerA");
+    const before = await signInAs("frontDeskA");
+    expect(before.permissions).toContain("billing.read");
+
+    const access = (await team.getMemberAccess(owner, { userId: ids.frontDeskA })).access;
+    await team.updateMember(owner, {
+      userId: ids.frontDeskA,
+      role: "FRONT_DESK",
+      access: Object.entries({ ...access, billing: { level: "NONE" as const, tabs: [] } }).map(([module, v]) => ({ module, level: v.level, tabs: v.tabs })),
+    });
+    expect(await prisma.userPermissionOverride.count({ where: { userId: ids.frontDeskA, decision: "deny" } })).toBeGreaterThan(0);
+
+    const after = await signInAs("frontDeskA");
+    expect(after.permissions).not.toContain("billing.read");
   });
 
   it("revokes a deactivated user's existing session immediately", async () => {
-    await signInAs("receptionA");
-    const receptionSession = session.current;
+    await signInAs("frontDeskA");
+    const frontDeskSession = session.current;
 
-    const admin = await signInAs("adminA");
-    await users.setUserActive(admin, { userId: ids.receptionA, active: false });
+    const owner = await signInAs("ownerA");
+    await users.setUserActive(owner, { userId: ids.frontDeskA, active: false });
 
-    session.current = receptionSession;
+    session.current = frontDeskSession;
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
-    expect(await prisma.auditLog.count({ where: { action: "user.deactivated", resourceId: ids.receptionA } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "user.deactivated", entityId: ids.frontDeskA } })).toBe(1);
 
     // Reactivating does not resurrect the old session.
-    await users.setUserActive(admin, { userId: ids.receptionA, active: true });
-    session.current = receptionSession;
+    await users.setUserActive(owner, { userId: ids.frontDeskA, active: true });
+    session.current = frontDeskSession;
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("rejects branch IDs from another clinic when inviting", async () => {
-    const admin = await signInAs("adminA");
-    await expect(
-      users.inviteUser(admin, { name: "New Hire", email: "new@ismile.test", role: "RECEPTIONIST", branchIds: [ids.b1] }),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-  });
-
-  it("maps duplicate emails to CONFLICT", async () => {
-    const admin = await signInAs("adminA");
-    await expect(
-      users.inviteUser(admin, { name: "Dup", email: "receptiona@ismile.test", role: "RECEPTIONIST", branchIds: [ids.a1] }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+  it("rejects a second account with the same email in one clinic", async () => {
+    const owner = await signInAs("ownerA");
+    await expect(users.inviteUser(owner, { name: "Dup", email: "frontdeska@ismile.test", role: "FRONT_DESK" })).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });

@@ -30,12 +30,12 @@ export const databaseStore: RateLimitStore = {
     const { prisma } = await import("@backend/lib/prisma");
     const newResetAt = new Date(now.getTime() + windowMs);
     // Single atomic upsert: starts a new window when the old one has expired.
-    // Assignments run left-to-right, so `resetAt` in the 2nd IF is still the old value.
+    // Assignments run left-to-right, so `reset_at` in the 2nd IF is still the old value.
     await prisma.$executeRaw`
-      INSERT INTO rate_limits (id, count, resetAt) VALUES (${key}, 1, ${newResetAt})
+      INSERT INTO rate_limits (id, count, reset_at) VALUES (${key}, 1, ${newResetAt})
       ON DUPLICATE KEY UPDATE
-        count = IF(resetAt <= ${now}, 1, count + 1),
-        resetAt = IF(resetAt <= ${now}, ${newResetAt}, resetAt)`;
+        count = IF(reset_at <= ${now}, 1, count + 1),
+        reset_at = IF(reset_at <= ${now}, ${newResetAt}, reset_at)`;
     const row = await prisma.rateLimit.findUnique({ where: { id: key } });
 
     // Opportunistic cleanup of expired windows (~1% of hits).

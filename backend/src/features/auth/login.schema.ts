@@ -9,15 +9,21 @@ export const emailSchema = z
   .max(254, "Email is too long")
   .pipe(z.email("Enter a valid email address"));
 
+/** Staff ID from `users.staff_code`, e.g. "FD-003". */
+export const staffCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9][A-Z0-9-]{1,31}$/, "Enter a valid staff ID");
+
 export const loginSchema = z.object({
-  // The login field is labelled "Email or staff ID"; staff IDs are not supported yet.
+  /** "Email or staff ID": emails are lower-cased, staff codes (e.g. FD-003) upper-cased. */
   email: z
     .string()
     .trim()
-    .toLowerCase()
     .min(1, "Enter your email or staff ID")
     .max(254, "Email is too long")
-    .pipe(z.email("Staff ID sign-in is coming soon. Please use your email for now.")),
+    .pipe(z.union([emailSchema, staffCodeSchema], "Enter a valid email or staff ID")),
   /** "Keep me signed in": longer absolute session lifetime (see lib/auth.config.ts). */
   remember: z.boolean().optional(),
   // No strength rules at login — only bound the length to protect the hasher.

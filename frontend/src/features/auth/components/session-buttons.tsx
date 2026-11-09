@@ -40,3 +40,19 @@ export function RevokeSessionsButton() {
     </Button>
   );
 }
+
+export function LogoutIconButton() {
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => startTransition(() => logoutAction())}
+      aria-label="Sign out"
+      title="Sign out"
+      className="grid size-9 place-items-center rounded-full text-[#0E2A47] transition-colors hover:bg-[#0E2A47]/5 disabled:opacity-50"
+    >
+      <LogOut className="size-[18px]" strokeWidth={1.8} aria-hidden />
+    </button>
+  );
+}

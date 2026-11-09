@@ -4,7 +4,7 @@ import { Errors } from "@backend/lib/errors/app-error";
 import { AUDIT_ACTIONS, audit } from "@backend/lib/logging/audit";
 import { listPatientsQuerySchema, patientIdSchema } from "./patient.schema";
 import { patientsRepository } from "./patients.repository";
-import type { PatientDetail, PatientListResult } from "./patients.types";
+import type { PatientDetail, PatientListResult, PatientStats } from "./patients.types";
 
 /**
  * Reference implementation of the access pattern every clinical module
@@ -17,6 +17,12 @@ export async function listPatients(user: AuthUser, rawQuery: unknown): Promise<P
   const query = listPatientsQuerySchema.parse(rawQuery);
   const { items, total } = await patientsRepository.list(recordScope(user), query);
   return { items, total, page: query.page, pageSize: query.pageSize };
+}
+
+export async function getPatientStats(user: AuthUser, since: Date): Promise<PatientStats> {
+  assertPermission(user, "patients.read");
+  const [total, createdSince] = await patientsRepository.counts(recordScope(user), since);
+  return { total, createdSince };
 }
 
 export async function getPatient(user: AuthUser, rawId: unknown): Promise<PatientDetail> {

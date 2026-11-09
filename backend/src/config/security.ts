@@ -25,6 +25,14 @@ export const SECURITY = {
     tokenTtlHours: 72,
   },
 
+  /** Clinic sign-in rules (Settings → Team & roles). */
+  accountLock: {
+    maxFailedLogins: 5,
+  },
+  idleSignOut: {
+    minutes: 30,
+  },
+
   rateLimits: {
     loginPerIp: { limit: 20, windowMs: 15 * 60_000 },
     loginPerEmail: { limit: 5, windowMs: 15 * 60_000 },

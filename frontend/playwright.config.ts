@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * E2E tests run against a seeded development database:
  *   npm run db:deploy && npm run db:seed
- *   E2E_PASSWORD="<SEED_PASSWORD>" npm run test:e2e
+ *   npm run test:e2e
  * First run: npx playwright install chromium
  */
 export default defineConfig({

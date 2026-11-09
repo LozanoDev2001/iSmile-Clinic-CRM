@@ -1,7 +1,8 @@
+import { effectiveAccess, grantsFromAccess, permissionsFor, roleTemplate } from "@backend/config/access";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@backend/lib/authorization";
-import { BRANCH_A1, CLINIC_A, makeUser } from "../helpers/fixtures";
+import { CLINIC_A, makeUser } from "../helpers/fixtures";
 
 const mocks = vi.hoisted(() => ({
   currentUser: null as AuthUser | null,
@@ -37,10 +38,10 @@ vi.mock("@backend/lib/logging/audit", async (importOriginal) => ({
 const { listPatientsHandler, getPatientHandler } = await import("@backend/features/patients/patients.controller");
 const authActions = await import("@backend/features/auth/auth.controller");
 const usersActions = await import("@backend/features/users/users.controller");
-const { userListSelect } = await import("@backend/features/users/users.repository");
+const { teamMemberSelect } = await import("@backend/features/users/users.repository");
 const { AuthError, CredentialsSignin } = await import("next-auth");
 
-const PATIENT_ID = "cpatient00000000000000001";
+const PATIENT_ID = "00000000-0000-4000-8000-500000000001";
 const get = (url: string) => new NextRequest(`http://localhost:3000${url}`);
 const ctx = <P>(params: P) => ({ params: Promise.resolve(params) });
 
@@ -58,25 +59,29 @@ describe("protected API routes", () => {
     expect(mocks.list).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for a role without patients.read", async () => {
-    mocks.currentUser = makeUser("CRM_STAFF");
+  it("returns 403 for a user whose Patients window is set to No access", async () => {
+    mocks.currentUser = makeUser("FRONT_DESK", {
+      permissions: permissionsFor(
+        effectiveAccess("FRONT_DESK", grantsFromAccess(roleTemplate("FRONT_DESK")), [{ grant: "patients:view", decision: "deny" }]),
+      ),
+    });
     const res = await listPatientsHandler(get("/api/patients"), ctx({}));
     expect(res.status).toBe(403);
     expect(mocks.list).not.toHaveBeenCalled();
   });
 
   it("scopes the query to the caller's clinic and branches", async () => {
-    mocks.currentUser = makeUser("RECEPTIONIST");
+    mocks.currentUser = makeUser("FRONT_DESK");
     const res = await listPatientsHandler(get("/api/patients?page=2&pageSize=10&search=smi"), ctx({}));
     expect(res.status).toBe(200);
     expect(mocks.list).toHaveBeenCalledWith(
-      { clinicId: CLINIC_A, branchIds: [BRANCH_A1], assigneeId: undefined },
+      { clinicId: CLINIC_A, assigneeId: undefined },
       { page: 2, pageSize: 10, search: "smi" },
     );
   });
 
   it("rejects invalid query input and identifiers before hitting the database", async () => {
-    mocks.currentUser = makeUser("RECEPTIONIST");
+    mocks.currentUser = makeUser("FRONT_DESK");
     const bad = await listPatientsHandler(get("/api/patients?pageSize=5000"), ctx({}));
     expect(bad.status).toBe(400);
     const badId = await getPatientHandler(get("/api/patients/1%20OR%201=1"), ctx({ id: "1 OR 1=1" }));
@@ -85,7 +90,7 @@ describe("protected API routes", () => {
   });
 
   it("returns 404 for records outside the caller's scope", async () => {
-    mocks.currentUser = makeUser("RECEPTIONIST");
+    mocks.currentUser = makeUser("FRONT_DESK");
     mocks.findById.mockResolvedValue(null);
     const res = await getPatientHandler(get(`/api/patients/${PATIENT_ID}`), ctx({ id: PATIENT_ID }));
     expect(res.status).toBe(404);
@@ -94,8 +99,8 @@ describe("protected API routes", () => {
 
 describe("medical record permission enforcement", () => {
   it("does not request medical fields for non-clinical roles", async () => {
-    mocks.currentUser = makeUser("RECEPTIONIST");
-    mocks.findById.mockResolvedValue({ id: PATIENT_ID, clinicId: CLINIC_A, firstName: "Maria" });
+    mocks.currentUser = makeUser("FRONT_DESK");
+    mocks.findById.mockResolvedValue({ id: PATIENT_ID, clinicId: CLINIC_A, fullName: "Maria Lopez" });
     const res = await getPatientHandler(get(`/api/patients/${PATIENT_ID}`), ctx({ id: PATIENT_ID }));
     expect(res.status).toBe(200);
     expect(mocks.findById).toHaveBeenCalledWith(expect.anything(), PATIENT_ID, { includeMedical: false });
@@ -105,11 +110,11 @@ describe("medical record permission enforcement", () => {
   it("includes medical fields for dentists, scoped to their patients, and audits the read", async () => {
     const dentist = makeUser("DENTIST");
     mocks.currentUser = dentist;
-    mocks.findById.mockResolvedValue({ id: PATIENT_ID, clinicId: CLINIC_A, allergies: "Penicillin" });
+    mocks.findById.mockResolvedValue({ id: PATIENT_ID, clinicId: CLINIC_A, medicalAlerts: "Penicillin" });
     const res = await getPatientHandler(get(`/api/patients/${PATIENT_ID}`), ctx({ id: PATIENT_ID }));
     expect(res.status).toBe(200);
     expect(mocks.findById).toHaveBeenCalledWith(
-      { clinicId: CLINIC_A, branchIds: [BRANCH_A1], assigneeId: dentist.id },
+      { clinicId: CLINIC_A, assigneeId: dentist.id },
       PATIENT_ID,
       { includeMedical: true },
     );
@@ -121,7 +126,7 @@ describe("protected Server Actions", () => {
   it("refuse to run without a session", async () => {
     const profile = await authActions.updateProfileAction({ name: "Mallory" });
     expect(profile).toMatchObject({ success: false, error: { code: "UNAUTHENTICATED" } });
-    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "DENTIST", branchIds: [] });
+    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "DENTIST" });
     expect(invite).toMatchObject({ success: false, error: { code: "UNAUTHENTICATED" } });
     const revoke = await authActions.revokeAllSessionsAction();
     expect(revoke).toMatchObject({ success: false, error: { code: "UNAUTHENTICATED" } });
@@ -129,16 +134,16 @@ describe("protected Server Actions", () => {
   });
 
   it("refuse users lacking the permission", async () => {
-    mocks.currentUser = makeUser("RECEPTIONIST");
-    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "DENTIST", branchIds: [] });
+    mocks.currentUser = makeUser("FRONT_DESK");
+    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "DENTIST" });
     expect(invite).toMatchObject({ success: false, error: { code: "FORBIDDEN" } });
-    const toggle = await usersActions.setUserActiveAction({ userId: "cuser00000000000000000009", active: false });
+    const toggle = await usersActions.setUserActiveAction({ userId: "00000000-0000-4000-8000-100000000009", active: false });
     expect(toggle).toMatchObject({ success: false, error: { code: "FORBIDDEN" } });
   });
 
-  it("refuse privilege escalation (clinic admin creating a super admin)", async () => {
-    mocks.currentUser = makeUser("CLINIC_ADMIN");
-    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "SUPER_ADMIN", branchIds: [] });
+  it("refuse privilege escalation (an owner creating another owner)", async () => {
+    mocks.currentUser = makeUser("OWNER");
+    const invite = await usersActions.inviteUserAction({ name: "Eve", email: "eve@x.test", role: "OWNER" });
     expect(invite).toMatchObject({ success: false, error: { code: "FORBIDDEN" } });
   });
 
@@ -151,8 +156,7 @@ describe("protected Server Actions", () => {
 
 describe("DTOs", () => {
   it("never select password hashes for user listings", () => {
-    expect(userListSelect.passwordHash).toBe(false);
-    expect(Object.entries(userListSelect).filter(([, v]) => v === true).map(([k]) => k)).not.toContain("passwordHash");
+    expect(Object.keys(teamMemberSelect)).not.toContain("passwordHash");
   });
 });
 

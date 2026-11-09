@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Role } from "@backend/generated/prisma/enums";
+import type { Role } from "@backend/config/permissions";
 import type { loginSchema } from "./login.schema";
 import type { changePasswordSchema, updateProfileSchema } from "./password.schema";
 import type { forgotPasswordSchema, resetPasswordSchema } from "./reset-password.schema";
@@ -20,7 +20,12 @@ export interface AuthenticatedIdentity {
   email: string;
   name: string;
   role: Role;
-  sessionVersion: number;
+}
+
+/** Returned by startSession(): the raw secret is stored only in the session cookie. */
+export interface StartedSession {
+  sessionId: string;
+  sessionSecret: string;
 }
 
 export type CredentialsResult =

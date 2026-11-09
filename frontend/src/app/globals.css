@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Full-size auth card (demo spec) on desktop screens tall enough to fit it. */
+@custom-variant desk (@media (min-width: 64rem) and (min-height: 821px));
 
 @theme inline {
   --color-background: var(--background);
@@ -128,4 +130,146 @@
   html {
     @apply font-sans;
   }
+}
+/* Animated auth background, ported from iSmile-CRM-Offline-Demo-rev2.html (Login). */
+.auth-bg {
+  background: linear-gradient(115deg, #e4f9fc 0%, #d2f3fa 45%, #bdeef8 100%);
+  background-size: 240% 240%;
+  animation: auth-gradient 22s ease-in-out infinite alternate;
+}
+
+.auth-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(56px);
+  opacity: 0.75;
+  will-change: transform;
+}
+.auth-b1 {
+  width: min(520px, 120vw);
+  height: min(520px, 120vw);
+  left: -120px;
+  top: -140px;
+  background: radial-gradient(circle at 30% 30%, #8fd3f4, rgba(143, 211, 244, 0));
+  animation: auth-float1 26s ease-in-out infinite alternate;
+}
+.auth-b2 {
+  width: min(460px, 110vw);
+  height: min(460px, 110vw);
+  right: 18%;
+  bottom: -160px;
+  background: radial-gradient(circle, #a7c4ff, rgba(167, 196, 255, 0));
+  animation: auth-float2 30s ease-in-out infinite alternate;
+}
+.auth-b3 {
+  width: min(380px, 90vw);
+  height: min(380px, 90vw);
+  left: 38%;
+  top: 12%;
+  background: radial-gradient(circle, #ffffff, rgba(255, 255, 255, 0));
+  opacity: 0.7;
+  animation: auth-float3 24s ease-in-out infinite alternate;
+}
+.auth-b4 {
+  width: min(320px, 80vw);
+  height: min(320px, 80vw);
+  right: -80px;
+  top: 8%;
+  background: radial-gradient(circle, #ffd9a0, rgba(255, 217, 160, 0));
+  opacity: 0.35;
+  animation: auth-float1 34s ease-in-out infinite alternate-reverse;
+}
+
+.auth-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+.auth-w1 { animation: auth-wave 16s ease-in-out infinite alternate; }
+.auth-w2 { animation: auth-wave 21s ease-in-out infinite alternate-reverse; }
+.auth-w3 { animation: auth-wave 19s ease-in-out infinite alternate; }
+.auth-w4 { animation: auth-drift 14s ease-in-out infinite alternate; }
+.auth-w5 { animation: auth-drift 18s ease-in-out infinite alternate-reverse; }
+
+@keyframes auth-gradient {
+  0% { background-position: 0% 30%; }
+  50% { background-position: 100% 60%; }
+  100% { background-position: 40% 100%; }
+}
+@keyframes auth-float1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(140px, 90px) scale(1.12); }
+  100% { transform: translate(60px, 200px) scale(0.95); }
+}
+@keyframes auth-float2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-160px, -80px) scale(1.15); }
+  100% { transform: translate(-60px, -180px) scale(1); }
+}
+@keyframes auth-float3 {
+  0% { transform: translate(0, 0) scale(0.9); }
+  50% { transform: translate(-120px, 120px) scale(1.1); }
+  100% { transform: translate(110px, 40px) scale(1); }
+}
+@keyframes auth-wave {
+  0% { transform: translate(-50px, 0) scaleY(1); }
+  50% { transform: translate(30px, -14px) scaleY(1.08); }
+  100% { transform: translate(70px, 6px) scaleY(0.94); }
+}
+@keyframes auth-drift {
+  0% { transform: translate(-40px, 10px); }
+  100% { transform: translate(60px, -20px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-bg,
+  .auth-blob,
+  .auth-wave {
+    animation: none;
+  }
+}
+
+/* App shell glass theme, ported from iSmile-CRM-Offline-Demo-rev2.html. */
+@utility app-bg {
+  background:
+    radial-gradient(1100px 620px at 8% -8%, rgba(47, 100, 168, 0.2), transparent 62%),
+    radial-gradient(900px 520px at 102% 2%, rgba(243, 154, 30, 0.16), transparent 58%),
+    radial-gradient(1000px 760px at 55% 118%, rgba(142, 91, 208, 0.13), transparent 62%),
+    linear-gradient(180deg, #eef2f8 0%, #e5ebf4 100%);
+  background-attachment: fixed;
+}
+@utility glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.8) 58%, rgba(234, 242, 252, 0.86) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 30px rgba(16, 48, 90, 0.07), 0 1px 2px rgba(16, 48, 90, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+@utility glass-pill {
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 6px 20px rgba(16, 48, 90, 0.06);
+}
+@utility rail-bg {
+  background: linear-gradient(180deg, #2c6cc0 0%, #1d5296 46%, #13325a 100%);
+  box-shadow: 0 18px 40px rgba(19, 50, 90, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+@utility card-blue {
+  background: linear-gradient(135deg, #2e70c6 0%, #1d5296 52%, #163f72 100%);
+  box-shadow: 0 14px 34px rgba(29, 82, 150, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+@utility card-navy {
+  background: linear-gradient(135deg, #1e4a7a 0%, #0e2a47 58%, #091d33 100%);
+  box-shadow: 0 14px 34px rgba(14, 42, 71, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+@utility card-amber {
+  background: linear-gradient(135deg, #fcd48c 0%, #f7b556 45%, #f29a2a 100%);
+  box-shadow: 0 14px 34px rgba(243, 154, 30, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+@utility fill-orange {
+  background: linear-gradient(135deg, #f9bc5e 0%, #f39a1e 55%, #e8870c 100%);
+  box-shadow: 0 8px 20px rgba(243, 154, 30, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+@utility btn-navy {
+  background: linear-gradient(135deg, #21507f 0%, #0e2a47 70%);
+  box-shadow: 0 8px 18px rgba(14, 42, 71, 0.22);
 }

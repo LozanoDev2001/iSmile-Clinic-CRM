@@ -1,7 +1,7 @@
 import "server-only";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { verifyCredentials } from "@backend/features/auth/auth.service";
+import { startSession, verifyCredentials } from "@backend/features/auth/auth.service";
 import { authConfig } from "./auth.config";
 import { getClientIp } from "./request-context";
 
@@ -15,7 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Email or staff ID", type: "text" },
         password: { label: "Password", type: "password" },
         remember: { label: "Keep me signed in", type: "checkbox" },
       },
@@ -27,7 +27,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (result.reason === "rate_limited") throw new RateLimitedSignin();
           return null; // → generic CredentialsSignin
         }
-        return { ...result.user, remember: String(remember) === "true" };
+        const keep = String(remember) === "true";
+        const session = await startSession(result.user.id, keep);
+        return { ...result.user, ...session, remember: keep };
       },
     }),
   ],

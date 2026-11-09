@@ -1,21 +1,25 @@
 import type { AuthUser } from "@backend/lib/authorization";
-import { getPermissions } from "@backend/config/permissions";
-import type { Role } from "@backend/generated/prisma/enums";
+import { permissionsFor, roleTemplate } from "@backend/config/access";
+import { ROLES, type Role } from "@backend/config/permissions";
 
-export const CLINIC_A = "cclinicaaaaaaaaaaaaaaaaaa";
-export const CLINIC_B = "cclinicbbbbbbbbbbbbbbbbbb";
-export const BRANCH_A1 = "cbrancha1aaaaaaaaaaaaaaaa";
-export const BRANCH_A2 = "cbrancha2aaaaaaaaaaaaaaaa";
+export const CLINIC_A = "00000000-0000-4000-8000-00000000000a";
+export const CLINIC_B = "00000000-0000-4000-8000-00000000000b";
+
+/** Stable UUID per role, e.g. the DENTIST test user. */
+export const userIdFor = (role: Role) => `00000000-0000-4000-8000-1000000000${String(ROLES.indexOf(role)).padStart(2, "0")}`;
 
 export function makeUser(role: Role, overrides: Partial<AuthUser> = {}): AuthUser {
+  const access = roleTemplate(role);
   return {
-    id: `cuser${role.toLowerCase().replace(/_/g, "")}`.padEnd(25, "0").slice(0, 25),
+    id: userIdFor(role),
     email: `${role.toLowerCase()}@ismile.test`,
     name: `Test ${role}`,
     role,
-    clinicId: role === "SUPER_ADMIN" ? null : CLINIC_A,
-    branchIds: role === "SUPER_ADMIN" || role === "CLINIC_ADMIN" ? [] : [BRANCH_A1],
-    permissions: getPermissions(role),
+    clinicId: CLINIC_A,
+    permissions: permissionsFor(access),
+    access,
+    idleSignOut: false,
+    sessionId: "00000000-0000-4000-8000-200000000001",
     ...overrides,
   };
 }

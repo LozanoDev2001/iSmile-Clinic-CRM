@@ -1,18 +1,16 @@
 import type { ReactNode } from "react";
 import { unstable_rethrow } from "next/navigation";
-import { DashboardNav, type NavItem } from "@/components/layout/dashboard-nav";
-import { Brand } from "@/components/shared/brand";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { IdleSignOut } from "@/components/layout/idle-sign-out";
+import { TopBar } from "@/components/layout/top-bar";
 import { ServiceUnavailable } from "@/components/shared/service-unavailable";
-import { ROLE_LABELS, type Permission } from "@backend/config/permissions";
-import { LogoutButton } from "@/features/auth/components/session-buttons";
+import { NAV_MODULES } from "@/config/navigation";
+import { outfit } from "@/lib/fonts";
+import { cn } from "@/lib/utils";
+import { ROLE_LABELS } from "@backend/config/permissions";
+import { SECURITY } from "@backend/config/security";
 import { can, requirePageUser, type AuthUser } from "@backend/lib/authorization";
 import { normalizeError } from "@backend/lib/errors/api-error-handler";
-
-const NAV: (NavItem & { permission?: Permission })[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/users", label: "Staff accounts", icon: "users", permission: "users.read" },
-  { href: "/profile", label: "My profile", icon: "profile" },
-];
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   let user: AuthUser;
@@ -24,24 +22,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     throw error;
   }
 
-  const items = NAV.filter((item) => !item.permission || can(user, item.permission)).map(
-    ({ href, label, icon }) => ({ href, label, icon }),
-  );
+  const allowedKeys = NAV_MODULES.filter((m) => !m.permission || can(user, m.permission)).map((m) => m.key);
+  const roleLabel = ROLE_LABELS[user.role];
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="flex shrink-0 flex-col gap-6 border-b bg-sidebar p-4 md:w-64 md:border-r md:border-b-0">
-        <Brand />
-        <DashboardNav items={items} />
-        <div className="mt-auto space-y-2 border-t pt-4">
-          <div className="px-3 text-sm">
-            <p className="truncate font-medium">{user.name}</p>
-            <p className="text-xs text-muted-foreground">{ROLE_LABELS[user.role]}</p>
-          </div>
-          <LogoutButton />
-        </div>
-      </aside>
-      <main className="flex-1 p-4 md:p-8">{children}</main>
+    <div className={cn(outfit.className, "app-bg flex min-h-dvh gap-4 p-3 text-[#0E2A47] sm:p-3.5")}>
+      {user.idleSignOut ? <IdleSignOut minutes={SECURITY.idleSignOut.minutes} /> : null}
+      <AppSidebar allowedKeys={allowedKeys} userName={user.name} roleLabel={roleLabel} />
+      <div className="flex min-w-0 flex-1 flex-col gap-4 px-0 pb-[calc(88px+env(safe-area-inset-bottom))] sm:px-1 md:pb-6">
+        <TopBar userName={user.name} roleLabel={roleLabel} />
+        <main className="min-w-0">{children}</main>
+      </div>
     </div>
   );
 }

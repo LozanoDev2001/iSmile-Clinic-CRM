@@ -27,7 +27,7 @@ export function ClinicLogo({ className }: { className?: string }) {
         height={110}
         priority
         unoptimized
-        className={cn("h-16 w-auto sm:h-20", className)}
+        className={cn("h-auto w-[170px] min-[360px]:w-[190px] sm:w-[220px] desk:w-[270px]", className)}
       />
     );
   }
@@ -59,7 +59,20 @@ export function ClinicLogo({ className }: { className?: string }) {
 export function VendorLogo({ className }: { className?: string }) {
   const src = findBrandAsset("crwd-logo");
   if (src) {
-    return <Image src={src} alt="crwd." width={96} height={28} unoptimized className={cn("h-5 w-auto", className)} />;
+    // Source file is yellow; the filter recolours it to brand blue.
+    return (
+      <Image
+        src={src}
+        alt="crwd."
+        width={97}
+        height={30}
+        unoptimized
+        className={cn(
+          "h-6 w-auto lg:h-[30px] [filter:brightness(0)_saturate(100%)_invert(26%)_sepia(94%)_saturate(2600%)_hue-rotate(207deg)_brightness(93%)_contrast(101%)]",
+          className,
+        )}
+      />
+    );
   }
   return <span className={cn("text-xl font-extrabold tracking-tight text-[#1652f0]", className)}>crwd.</span>;
 }

@@ -1,42 +1,57 @@
 import type { z } from "zod";
-import type { Role } from "@backend/generated/prisma/enums";
-import type { inviteUserSchema, setUserActiveSchema } from "./user.schema";
+import type { AccessMap } from "@backend/config/access";
+import type { Role } from "@backend/config/permissions";
+import type { inviteUserSchema, memberIdSchema, setUserActiveSchema, updateMemberSchema } from "./user.schema";
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
 
-/** `z.input`: branchIds is optional for callers (the schema defaults it to []). */
 export type InviteUserInput = z.input<typeof inviteUserSchema>;
 export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
+export type MemberIdInput = z.infer<typeof memberIdSchema>;
+export type UpdateMemberInput = z.input<typeof updateMemberSchema>;
 
 // ─── Outputs / DTOs ─────────────────────────────────────────────────────────
 
-/** Public-safe staff account. Mirrors `userListSelect` — never contains the password hash. */
-export interface UserListItem {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-  clinicId: string | null;
-  isActive: boolean;
-  lastLoginAt: Date | null;
-  createdAt: Date;
-}
-
-export interface UserListResult {
-  items: UserListItem[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 export interface InviteOptions {
   roles: Role[];
-  clinics: { id: string; name: string }[];
-  branches: { id: string; name: string; clinicId: string }[];
-  /** Only Super Admins pick a clinic; everyone else invites into their own. */
-  chooseClinic: boolean;
 }
 
 export interface InviteUserResult {
   emailSent: boolean;
+}
+
+/** UI status: `users.status` suspended shows as Active + Locked. */
+export type MemberStatus = "ACTIVE" | "INVITED" | "DEACTIVATED";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  jobTitle: string | null;
+  staffCode: string | null;
+  status: MemberStatus;
+  locked: boolean;
+  lastLoginAt: Date | null;
+  /** The viewer may change this member's role, access and account. */
+  editable: boolean;
+}
+
+export interface TeamOverview {
+  members: TeamMember[];
+  activeCount: number;
+}
+
+export interface MemberAccessDetail {
+  member: TeamMember;
+  access: AccessMap;
+  /** Owner access cannot be narrowed. */
+  fixedAccess: boolean;
+}
+
+export interface AccessLogEntry {
+  id: string;
+  text: string;
+  tone: "grant" | "revoke" | "neutral" | "change";
+  at: Date;
 }

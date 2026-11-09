@@ -1,24 +1,21 @@
 import "server-only";
+import { timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import {
-  ASSIGNED_RECORDS_ONLY_ROLES,
-  CLINIC_WIDE_ROLES,
-  getPermissions,
-  hasPermission,
-  type Permission,
-} from "@backend/config/permissions";
-import type { Role } from "@backend/generated/prisma/enums";
+import { effectiveAccess, grantKey, permissionsFor, type AccessMap } from "@backend/config/access";
+import { ASSIGNED_RECORDS_ONLY_ROLES, isRole, type Permission, type Role } from "@backend/config/permissions";
+import { signInRulesFrom } from "@backend/features/settings/settings.types";
 import { authRepository } from "@backend/features/auth/auth.repository";
 import { auth } from "./auth";
 import { Errors, isAppError } from "@backend/lib/errors/app-error";
 import { logSecurityEvent } from "@backend/lib/logging/logger";
-import { prisma } from "./prisma";
+import { hashToken } from "@backend/lib/security/password";
 
 /**
  * Server-side authorization. Every helper re-validates against the database
- * (once per request, via React `cache`), so deactivation, role changes and
- * revoked sessions take effect immediately even though sessions are JWTs.
+ * (once per request, via React `cache`): the session must still be open in
+ * `security_sessions` and the account active, so revocation, deactivation and
+ * access changes take effect immediately even though the cookie is a JWT.
  *
  * Use in Server Components, Server Actions, Route Handlers and services.
  * Never trust clinic IDs, roles or permissions sent by the client.
@@ -29,46 +26,69 @@ export interface AuthUser {
   email: string;
   name: string;
   role: Role;
-  /** null only for SUPER_ADMIN. */
-  clinicId: string | null;
-  /** Branches explicitly assigned (ignored for clinic-wide roles). */
-  branchIds: string[];
+  clinicId: string;
   permissions: Permission[];
+  /** Effective window access (role grants + allow/deny overrides). */
+  access: AccessMap;
+  /** Clinic sign-in rule: sign out after inactivity. */
+  idleSignOut: boolean;
+  /** The `security_sessions` row behind this request. */
+  sessionId: string;
 }
 
 // ─── Session → user ──────────────────────────────────────────────────────────
 
+function secretMatches(secret: string, storedHash: string): boolean {
+  const a = Buffer.from(hashToken(secret), "hex");
+  const b = Buffer.from(storedHash, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /** The current user, or null if not signed in / session no longer valid. */
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) return null;
+  if (!session?.sessionId || !session.sessionSecret) return null;
 
-  const user = await authRepository.findSessionUser(userId);
-  if (!user) return null;
+  const row = await authRepository.findSession(session.sessionId);
+  if (!row) return null;
 
-  const revoked = user.sessionVersion !== session.sessionVersion;
-  const disabled = !user.isActive || (user.clinic !== null && !user.clinic.isActive);
-  if (revoked || disabled) {
-    logSecurityEvent("session_rejected", { userId, reason: revoked ? "revoked" : "disabled" });
+  const { user } = row;
+  const role = user.userRoles[0]?.role.code;
+  const reason =
+    row.revokedAt ? "revoked"
+    : row.expiresAt <= new Date() ? "expired"
+    : !secretMatches(session.sessionSecret, row.refreshTokenHash) ? "secret_mismatch"
+    : user.status !== "active" ? `account_${user.status}`
+    : !role || !isRole(role) ? "no_role"
+    : null;
+  if (reason || !role || !isRole(role)) {
+    logSecurityEvent("session_rejected", { userId: user.id, reason });
     return null;
   }
 
+  const roleGrants = user.userRoles[0].role.rolePermissions.map((rp) => grantKey(rp.permission.resource, rp.permission.action));
+  const overrides = user.userPermissionOverrides.map((o) => ({
+    grant: grantKey(o.permission.resource, o.permission.action),
+    decision: o.decision === "deny" ? ("deny" as const) : ("allow" as const),
+  }));
+  const access = effectiveAccess(role, roleGrants, overrides);
   return {
     id: user.id,
     email: user.email,
-    name: user.name,
-    role: user.role,
+    name: user.fullName,
+    role,
     clinicId: user.clinicId,
-    branchIds: user.branches.map((b) => b.branchId),
-    permissions: getPermissions(user.role),
+    permissions: permissionsFor(access),
+    access,
+    idleSignOut: signInRulesFrom(user.clinic.settings).idleSignOut,
+    sessionId: session.sessionId,
   };
 });
 
 // ─── Pure checks (unit-tested; no I/O) ───────────────────────────────────────
 
-export function can(user: Pick<AuthUser, "role">, permission: Permission): boolean {
-  return hasPermission(user.role, permission);
+export function can(user: Pick<AuthUser, "permissions">, permission: Permission): boolean {
+  return user.permissions.includes(permission);
 }
 
 export function assertPermission(user: AuthUser, permission: Permission): void {
@@ -86,59 +106,28 @@ export function assertRole(user: AuthUser, roles: Role | readonly Role[]): void 
   }
 }
 
-export function isClinicWide(user: Pick<AuthUser, "role">): boolean {
-  return CLINIC_WIDE_ROLES.includes(user.role);
-}
-
 export function assertClinicAccess(user: AuthUser, clinicId: string | null | undefined): void {
-  if (user.role === "SUPER_ADMIN") return;
   if (!clinicId || user.clinicId !== clinicId) {
     logSecurityEvent("cross_clinic_denied", { userId: user.id });
     throw Errors.forbidden();
   }
 }
 
-export function assertBranchAccess(user: AuthUser, branch: { id: string; clinicId: string }): void {
-  assertClinicAccess(user, branch.clinicId);
-  if (isClinicWide(user)) return;
-  if (!user.branchIds.includes(branch.id)) {
-    logSecurityEvent("branch_denied", { userId: user.id });
-    throw Errors.forbidden();
-  }
-}
-
-/**
- * The clinic a user is operating in. Non super-admins always use their own
- * clinic; any client-supplied clinic ID is ignored for them.
- */
-export function resolveClinicId(user: AuthUser, requested?: string | null): string {
-  if (user.role === "SUPER_ADMIN") {
-    if (!requested) throw Errors.validation({ clinicId: ["Select a clinic"] });
-    return requested;
-  }
-  if (!user.clinicId) throw Errors.forbidden();
-  return user.clinicId;
-}
-
 /** Which records a user may see. `undefined` means "not restricted on this axis". */
 export interface RecordScope {
-  clinicId?: string;
-  branchIds?: string[];
+  clinicId: string;
   /** Only records assigned to this user (e.g. a dentist's own patients). */
   assigneeId?: string;
 }
 
 /**
- * Data-visibility rules: clinic → assigned branches → (for dentists) assigned
- * records. Repositories translate this into their Prisma `where` clause, and
- * every query on clinic-owned data must apply it.
+ * Data-visibility rules: the user's clinic, then (for dentists) only records
+ * assigned to them. Repositories translate this into their Prisma `where`
+ * clause, and every query on clinic-owned data must apply it.
  */
 export function recordScope(user: AuthUser): RecordScope {
-  if (user.role === "SUPER_ADMIN") return {};
-  if (!user.clinicId) throw Errors.forbidden();
   return {
     clinicId: user.clinicId,
-    branchIds: isClinicWide(user) ? undefined : user.branchIds,
     assigneeId: ASSIGNED_RECORDS_ONLY_ROLES.includes(user.role) ? user.id : undefined,
   };
 }
@@ -166,18 +155,6 @@ export async function requirePermission(...permissions: Permission[]): Promise<A
 export async function requireClinicAccess(clinicId: string): Promise<AuthUser> {
   const user = await requireAuth();
   assertClinicAccess(user, clinicId);
-  return user;
-}
-
-export async function requireBranchAccess(branchId: string): Promise<AuthUser> {
-  const user = await requireAuth();
-  const branch = await prisma.branch.findUnique({
-    where: { id: branchId },
-    select: { id: true, clinicId: true, isActive: true },
-  });
-  // Same response for "missing" and "not yours" to avoid probing other clinics.
-  if (!branch || !branch.isActive) throw Errors.forbidden();
-  assertBranchAccess(user, branch);
   return user;
 }
 

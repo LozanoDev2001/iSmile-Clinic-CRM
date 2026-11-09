@@ -1,15 +1,22 @@
 import type { PrismaClient } from "@backend/generated/prisma/client";
+import { seedAccessModel } from "../../prisma/seed-access";
 
-/** Empties every table (FK-safe order). Only ever run against DATABASE_URL_TEST. */
+/**
+ * Empties the tables tests write to (FK-safe order) and re-seeds the system
+ * roles and permissions. Only ever run against DATABASE_URL_TEST.
+ */
 export async function resetDatabase(prisma: PrismaClient) {
   await prisma.auditLog.deleteMany();
   await prisma.rateLimit.deleteMany();
-  await prisma.passwordResetToken.deleteMany();
+  await prisma.passwordToken.deleteMany();
+  await prisma.securitySession.deleteMany();
+  await prisma.userPermissionOverride.deleteMany();
+  await prisma.userRole.deleteMany();
   await prisma.patient.deleteMany();
-  await prisma.userBranch.deleteMany();
+  await prisma.contact.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.branch.deleteMany();
   await prisma.clinic.deleteMany();
+  return seedAccessModel(prisma);
 }
 
 /**

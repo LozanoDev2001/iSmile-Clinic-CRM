@@ -1,18 +1,22 @@
 import type { DefaultSession } from "next-auth";
-import type { Role } from "@backend/generated/prisma/enums";
+import type { Role } from "@backend/config/permissions";
 
 declare module "next-auth" {
   interface User {
     role?: Role;
-    sessionVersion?: number;
+    /** `security_sessions.id` created at sign-in. */
+    sessionId?: string;
+    /** Raw secret whose SHA-256 is `security_sessions.refresh_token_hash`. */
+    sessionSecret?: string;
     /** "Keep me signed in" was ticked at login. */
     remember?: boolean;
   }
 
   interface Session {
     user: { id: string; role: Role } & DefaultSession["user"];
-    /** Compared with `users.sessionVersion` on every server request. */
-    sessionVersion: number;
+    /** Checked against `security_sessions` on every server request. */
+    sessionId: string;
+    sessionSecret: string;
   }
 }
 
@@ -20,7 +24,8 @@ declare module "@auth/core/jwt" {
   interface JWT {
     uid?: string;
     role?: Role;
-    sv?: number;
+    sid?: string;
+    sst?: string;
     /** "Keep me signed in" was ticked at login. */
     rm?: boolean;
     /** Login time (epoch seconds); enforces the absolute session lifetime. */

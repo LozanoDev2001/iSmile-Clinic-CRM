@@ -13,9 +13,14 @@ const HOUR = 60 * 60;
 const standardLifetime = Number(process.env.SESSION_MAX_AGE_HOURS ?? 8) * HOUR;
 const rememberLifetime = Math.max(Number(process.env.SESSION_REMEMBER_HOURS ?? 72) * HOUR, standardLifetime);
 
+/** Absolute lifetime of a sign-in, also written to `security_sessions.expires_at`. */
+export function sessionLifetimeSeconds(remember: boolean): number {
+  return remember ? rememberLifetime : standardLifetime;
+}
+
 export const authConfig = {
-  // Credentials login requires JWT sessions in Auth.js. Revocation is handled
-  // with `sessionVersion` (see prisma/schema.prisma).
+  // Credentials login requires JWT sessions in Auth.js. Each token points at a
+  // `security_sessions` row, which is what revocation and expiry act on.
   session: {
     strategy: "jwt",
     // Cookie lifetime is the longest allowed; the jwt callback enforces the
@@ -38,11 +43,12 @@ export const authConfig = {
       if (user) {
         token.uid = user.id;
         token.role = user.role;
-        token.sv = user.sessionVersion ?? 0;
+        token.sid = user.sessionId;
+        token.sst = user.sessionSecret;
         token.rm = user.remember ?? false;
         token.lat = Math.floor(Date.now() / 1000);
       }
-      const lifetime = token.rm ? rememberLifetime : standardLifetime;
+      const lifetime = sessionLifetimeSeconds(!!token.rm);
       if (token.lat && Math.floor(Date.now() / 1000) - token.lat > lifetime) {
         return null; // absolute lifetime reached: sign out
       }
@@ -53,7 +59,8 @@ export const authConfig = {
         session.user.id = token.uid;
         session.user.role = token.role;
       }
-      session.sessionVersion = token.sv ?? 0;
+      session.sessionId = token.sid ?? "";
+      session.sessionSecret = token.sst ?? "";
       return session;
     },
   },

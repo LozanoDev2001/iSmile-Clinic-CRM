@@ -1,37 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BRANCH_A1, BRANCH_A2, CLINIC_A, CLINIC_B, makeUser } from "../helpers/fixtures";
+import { grantsFromAccess, roleTemplate } from "@backend/config/access";
+import { hashToken } from "@backend/lib/security/password";
+import { CLINIC_A, CLINIC_B, makeUser } from "../helpers/fixtures";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  findSessionUser: vi.fn(),
-  findBranch: vi.fn(),
+  findSession: vi.fn(),
 }));
 
 vi.mock("@backend/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@backend/features/auth/auth.repository", () => ({
-  authRepository: { findSessionUser: mocks.findSessionUser },
+  authRepository: { findSession: mocks.findSession },
 }));
-vi.mock("@backend/lib/prisma", () => ({ prisma: { branch: { findUnique: mocks.findBranch } } }));
 
 const authz = await import("@backend/lib/authorization");
 
-const dbUser = (overrides: Record<string, unknown> = {}) => ({
-  id: "cuser00000000000000000001",
-  email: "dana@ismile.test",
-  name: "Dana",
-  role: "DENTIST",
-  clinicId: CLINIC_A,
-  isActive: true,
-  sessionVersion: 3,
-  clinic: { isActive: true },
-  branches: [{ branchId: BRANCH_A1 }],
-  passwordHash: "$argon2id$should-never-leak",
+const USER_ID = "00000000-0000-4000-8000-300000000001";
+const SESSION_ID = "00000000-0000-4000-8000-400000000001";
+const SECRET = "session-secret";
+
+const grantRows = (grants: string[]) =>
+  grants.map((g) => ({ permission: { resource: g.slice(0, g.indexOf(":")), action: g.slice(g.indexOf(":") + 1) } }));
+
+const dbSession = (overrides: Record<string, unknown> = {}, userOverrides: Record<string, unknown> = {}) => ({
+  refreshTokenHash: hashToken(SECRET),
+  expiresAt: new Date(Date.now() + 3_600_000),
+  revokedAt: null,
+  user: {
+    id: USER_ID,
+    email: "dana@ismile.test",
+    fullName: "Dana",
+    status: "active",
+    clinicId: CLINIC_A,
+    clinic: { settings: { signIn: { lockAfterFailedLogins: true, idleSignOut: true } } },
+    userRoles: [{ role: { code: "DENTIST", rolePermissions: grantRows(grantsFromAccess(roleTemplate("DENTIST"))) } }],
+    userPermissionOverrides: [],
+    passwordHash: "$argon2id$should-never-leak",
+    ...userOverrides,
+  },
   ...overrides,
 });
 
-const session = (sessionVersion = 3) => ({
-  user: { id: "cuser00000000000000000001", role: "DENTIST" },
-  sessionVersion,
+const session = (secret = SECRET) => ({
+  user: { id: USER_ID, role: "DENTIST" },
+  sessionId: SESSION_ID,
+  sessionSecret: secret,
   expires: new Date(Date.now() + 3_600_000).toISOString(),
 });
 
@@ -45,44 +58,67 @@ describe("requireAuth (session validation)", () => {
 
   it("returns a validated user context without sensitive fields", async () => {
     mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(dbUser());
+    mocks.findSession.mockResolvedValue(dbSession());
     const user = await authz.requireAuth();
-    expect(user).toMatchObject({ id: "cuser00000000000000000001", role: "DENTIST", clinicId: CLINIC_A, branchIds: [BRANCH_A1] });
+    expect(mocks.findSession).toHaveBeenCalledWith(SESSION_ID);
+    expect(user).toMatchObject({ id: USER_ID, role: "DENTIST", clinicId: CLINIC_A, sessionId: SESSION_ID, idleSignOut: true });
     expect(user.permissions).toContain("patients.medical.read");
     expect(JSON.stringify(user)).not.toContain("argon2");
-    expect(user).not.toHaveProperty("passwordHash");
-    expect(user).not.toHaveProperty("sessionVersion");
+    expect(JSON.stringify(user)).not.toContain(SECRET);
   });
 
-  it("rejects a revoked session (password change / sign-out everywhere)", async () => {
-    mocks.auth.mockResolvedValue(session(2));
-    mocks.findSessionUser.mockResolvedValue(dbUser({ sessionVersion: 3 }));
-    await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
-  });
-
-  it("rejects a deactivated account immediately", async () => {
+  it("rejects a revoked session (sign-out, password change, deactivation)", async () => {
     mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(dbUser({ isActive: false }));
+    mocks.findSession.mockResolvedValue(dbSession({ revokedAt: new Date() }));
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("rejects users of a deactivated clinic", async () => {
+  it("rejects an expired session", async () => {
     mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(dbUser({ clinic: { isActive: false } }));
+    mocks.findSession.mockResolvedValue(dbSession({ expiresAt: new Date(Date.now() - 1000) }));
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("rejects a session whose user was deleted", async () => {
-    mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(null);
+  it("rejects a cookie whose secret does not match the stored hash", async () => {
+    mocks.auth.mockResolvedValue(session("forged-secret"));
+    mocks.findSession.mockResolvedValue(dbSession());
     await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("rejects suspended, disabled and invited accounts", async () => {
+    mocks.auth.mockResolvedValue(session());
+    for (const status of ["suspended", "disabled", "invited"]) {
+      mocks.findSession.mockResolvedValue(dbSession({}, { status }));
+      await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    }
+  });
+
+  it("rejects a session that no longer exists", async () => {
+    mocks.auth.mockResolvedValue(session());
+    mocks.findSession.mockResolvedValue(null);
+    await expect(authz.requireAuth()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("applies allow/deny overrides on top of the role's grants", async () => {
+    mocks.auth.mockResolvedValue(session());
+    mocks.findSession.mockResolvedValue(
+      dbSession({}, {
+        userPermissionOverrides: [
+          { decision: "allow", permission: { resource: "billing", action: "view" } },
+          { decision: "deny", permission: { resource: "patients", action: "tab:visit_history" } },
+        ],
+      }),
+    );
+    const user = await authz.requireAuth();
+    expect(user.permissions).toContain("billing.read");
+    expect(user.permissions).not.toContain("patients.medical.read");
   });
 });
 
 describe("requirePermission / requireRole", () => {
   beforeEach(() => {
     mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(dbUser());
+    mocks.findSession.mockResolvedValue(dbSession());
   });
 
   it("allows a role that has the permission", async () => {
@@ -98,59 +134,23 @@ describe("requirePermission / requireRole", () => {
   });
 
   it("checks roles", async () => {
-    await expect(authz.requireRole(["DENTIST", "CLINIC_ADMIN"])).resolves.toBeTruthy();
-    await expect(authz.requireRole("CLINIC_ADMIN")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(authz.requireRole(["DENTIST", "OWNER"])).resolves.toBeTruthy();
+    await expect(authz.requireRole("OWNER")).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 
-describe("clinic and branch isolation", () => {
+describe("clinic isolation and record scope", () => {
   it("denies cross-clinic access", () => {
-    const admin = makeUser("CLINIC_ADMIN");
-    expect(() => authz.assertClinicAccess(admin, CLINIC_A)).not.toThrow();
-    expect(() => authz.assertClinicAccess(admin, CLINIC_B)).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
-    expect(() => authz.assertClinicAccess(admin, null)).toThrow();
+    const owner = makeUser("OWNER");
+    expect(() => authz.assertClinicAccess(owner, CLINIC_A)).not.toThrow();
+    expect(() => authz.assertClinicAccess(owner, CLINIC_B)).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
+    expect(() => authz.assertClinicAccess(owner, null)).toThrow();
   });
 
-  it("lets super admins reach any clinic", () => {
-    expect(() => authz.assertClinicAccess(makeUser("SUPER_ADMIN"), CLINIC_B)).not.toThrow();
-  });
-
-  it("limits branch-scoped staff to their assigned branches", () => {
-    const receptionist = makeUser("RECEPTIONIST");
-    expect(() => authz.assertBranchAccess(receptionist, { id: BRANCH_A1, clinicId: CLINIC_A })).not.toThrow();
-    expect(() => authz.assertBranchAccess(receptionist, { id: BRANCH_A2, clinicId: CLINIC_A })).toThrow();
-  });
-
-  it("gives clinic admins every branch of their own clinic only", () => {
-    const admin = makeUser("CLINIC_ADMIN");
-    expect(() => authz.assertBranchAccess(admin, { id: BRANCH_A2, clinicId: CLINIC_A })).not.toThrow();
-    expect(() => authz.assertBranchAccess(admin, { id: "cbranchb1", clinicId: CLINIC_B })).toThrow();
-  });
-
-  it("requireBranchAccess treats unknown branches as forbidden (no probing)", async () => {
-    mocks.auth.mockResolvedValue(session());
-    mocks.findSessionUser.mockResolvedValue(dbUser());
-    mocks.findBranch.mockResolvedValue(null);
-    await expect(authz.requireBranchAccess(BRANCH_A2)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    mocks.findBranch.mockResolvedValue({ id: BRANCH_A1, clinicId: CLINIC_A, isActive: true });
-    await expect(authz.requireBranchAccess(BRANCH_A1)).resolves.toBeTruthy();
-  });
-
-  it("ignores client-supplied clinic IDs for non super admins", () => {
-    const admin = makeUser("CLINIC_ADMIN");
-    expect(authz.resolveClinicId(admin, CLINIC_B)).toBe(CLINIC_A);
-    expect(authz.resolveClinicId(makeUser("SUPER_ADMIN"), CLINIC_B)).toBe(CLINIC_B);
-  });
-
-  it("builds record scopes: clinic → branches → assigned records", () => {
-    expect(authz.recordScope(makeUser("SUPER_ADMIN"))).toEqual({});
-    expect(authz.recordScope(makeUser("CLINIC_ADMIN"))).toEqual({ clinicId: CLINIC_A, branchIds: undefined, assigneeId: undefined });
-    expect(authz.recordScope(makeUser("RECEPTIONIST"))).toMatchObject({ clinicId: CLINIC_A, branchIds: [BRANCH_A1], assigneeId: undefined });
+  it("scopes every user to their clinic, and dentists to their own patients", () => {
+    expect(authz.recordScope(makeUser("OWNER"))).toEqual({ clinicId: CLINIC_A, assigneeId: undefined });
+    expect(authz.recordScope(makeUser("FRONT_DESK"))).toEqual({ clinicId: CLINIC_A, assigneeId: undefined });
     const dentist = makeUser("DENTIST");
-    expect(authz.recordScope(dentist)).toMatchObject({ clinicId: CLINIC_A, branchIds: [BRANCH_A1], assigneeId: dentist.id });
-  });
-
-  it("never produces an unscoped query for a clinic user missing a clinic", () => {
-    expect(() => authz.recordScope(makeUser("RECEPTIONIST", { clinicId: null }))).toThrow();
+    expect(authz.recordScope(dentist)).toEqual({ clinicId: CLINIC_A, assigneeId: dentist.id });
   });
 });

@@ -14,6 +14,9 @@ import type { ForgotPasswordInput, ResetPasswordInput } from "./auth.types";
 
 const INVALID_LINK = "This reset link is invalid or has expired. Please request a new one.";
 
+/** Reset and invite links only work for accounts that are invited or active (not locked or disabled). */
+const linkUsable = (status: string) => status === "invited" || status === "active";
+
 function resetUrl(token: string) {
   return `${env.APP_URL.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
 }
@@ -39,10 +42,23 @@ export async function requestPasswordReset(input: ForgotPasswordInput, ipAddress
     return;
   }
 
+  // Email failures are logged inside; the caller still sees the generic confirmation.
+  await sendPasswordResetEmail({ ...user, name: user.fullName }, user.id);
+}
+
+/**
+ * Issues a single-use reset link and emails it. `actorId` is who asked: the
+ * user themself, or an owner/manager from Settings. Returns false if the email failed.
+ */
+export async function sendPasswordResetEmail(
+  user: { id: string; email: string; name: string; clinicId: string },
+  actorId: string,
+): Promise<boolean> {
   const { token, tokenHash } = generateToken();
   const expiresAt = new Date(Date.now() + SECURITY.passwordReset.tokenTtlMinutes * 60_000);
-  await authRepository.createPasswordToken(user.id, tokenHash, "RESET", expiresAt);
+  await authRepository.createPasswordToken(user.id, tokenHash, "reset", expiresAt);
 
+  let sent = true;
   try {
     await sendEmail({
       to: user.email,
@@ -53,7 +69,7 @@ export async function requestPasswordReset(input: ForgotPasswordInput, ipAddress
         `${resetUrl(token)}\n\nIf you did not request this, you can ignore this email.`,
     });
   } catch (error) {
-    // Logged for operators; the user still sees the generic confirmation.
+    sent = false;
     logger.error("Password reset email failed", { userId: user.id, error });
   }
 
@@ -61,9 +77,10 @@ export async function requestPasswordReset(input: ForgotPasswordInput, ipAddress
     action: AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED,
     resourceType: "user",
     resourceId: user.id,
-    actorId: user.id,
+    actorId,
     clinicId: user.clinicId,
   });
+  return sent;
 }
 
 /** True when the token exists, is unused and unexpired (for rendering the form). */
@@ -71,7 +88,7 @@ export async function isResetTokenValid(token: string): Promise<boolean> {
   const parsed = resetTokenSchema.safeParse(token);
   if (!parsed.success) return false;
   const record = await authRepository.findValidToken(hashToken(parsed.data));
-  return !!record && record.user.isActive;
+  return !!record && linkUsable(record.user.status);
 }
 
 /**
@@ -81,7 +98,7 @@ export async function isResetTokenValid(token: string): Promise<boolean> {
 export async function resetPassword(input: ResetPasswordInput): Promise<void> {
   const { token, password } = resetPasswordSchema.parse(input);
   const record = await authRepository.findValidToken(hashToken(token));
-  if (!record || !record.user.isActive) {
+  if (!record || !linkUsable(record.user.status)) {
     logSecurityEvent("password_reset_invalid_token");
     throw Errors.validation({ token: [INVALID_LINK] }, INVALID_LINK);
   }
@@ -111,7 +128,7 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
 export async function createInviteToken(userId: string, tx: TransactionClient): Promise<string> {
   const { token, tokenHash } = generateToken();
   const expiresAt = new Date(Date.now() + SECURITY.invite.tokenTtlHours * 3_600_000);
-  await authRepository.createPasswordToken(userId, tokenHash, "INVITE", expiresAt, tx);
+  await authRepository.createPasswordToken(userId, tokenHash, "invite", expiresAt, tx);
   return token;
 }
 

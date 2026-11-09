@@ -3,8 +3,11 @@ import { makeUser } from "../helpers/fixtures";
 
 const mocks = vi.hoisted(() => ({
   repo: {
-    findCredentialsByEmail: vi.fn(),
-    recordLogin: vi.fn(),
+    findCredentials: vi.fn(),
+    countRecentFailedLogins: vi.fn().mockResolvedValue(0),
+    setStatus: vi.fn(),
+    revokeUserSessions: vi.fn(),
+    createSession: vi.fn(),
     findPasswordHash: vi.fn(),
     setPassword: vi.fn(),
     invalidateUserTokens: vi.fn(),
@@ -46,19 +49,23 @@ const passwordHash = await hashPassword(PASSWORD);
 let ipCounter = 0;
 const freshIp = () => `10.0.0.${++ipCounter}`;
 
+// Clears call history only; each mock keeps its implementation.
+beforeEach(() => vi.clearAllMocks());
+
+const USER_ID = "00000000-0000-4000-8000-300000000001";
+const CLINIC_ID = "00000000-0000-4000-8000-00000000000a";
+
 const account = (overrides: Record<string, unknown> = {}) => ({
-  id: "cuser00000000000000000001",
+  id: USER_ID,
   email: "dana@ismile.test",
-  name: "Dana",
-  role: "DENTIST",
-  isActive: true,
+  fullName: "Dana",
+  status: "active",
   passwordHash,
-  sessionVersion: 4,
-  clinic: { isActive: true },
+  clinicId: CLINIC_ID,
+  clinic: { settings: { signIn: { lockAfterFailedLogins: true, idleSignOut: false } } },
+  userRoles: [{ role: { code: "DENTIST" } }],
   ...overrides,
 });
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("password hashing", () => {
   it("uses Argon2id and verifies correctly", async () => {
@@ -85,9 +92,10 @@ describe("tokens", () => {
 });
 
 describe("validation schemas", () => {
-  it("normalises login email", () => {
+  it("normalises an email or staff ID at login", () => {
     expect(loginSchema.parse({ email: "  Dana@ISMILE.test ", password: "x" }).email).toBe("dana@ismile.test");
-    expect(loginSchema.safeParse({ email: "nope", password: "x" }).success).toBe(false);
+    expect(loginSchema.parse({ email: " fd-003 ", password: "x" }).email).toBe("FD-003");
+    expect(loginSchema.safeParse({ email: "not an id!", password: "x" }).success).toBe(false);
   });
 
   it("enforces the password policy", () => {
@@ -137,73 +145,97 @@ describe("session configuration", () => {
   it("records the remember choice and login time at sign-in", () => {
     const token = authConfig.callbacks.jwt({
       token: {},
-      user: { id: "u1", role: "DENTIST", sessionVersion: 0, remember: true },
+      user: { id: "u1", role: "DENTIST", remember: true },
     } as never) as Record<string, unknown>;
     expect(token.rm).toBe(true);
     expect(token.lat).toBeTypeOf("number");
   });
 
-  it("carries the session version into the token and session", () => {
+  it("carries the security_sessions id and secret into the token and session", () => {
     const token = authConfig.callbacks.jwt({
       token: {},
-      user: { id: "u1", role: "DENTIST", sessionVersion: 7 },
+      user: { id: "u1", role: "DENTIST", sessionId: "s1", sessionSecret: "secret" },
     } as never) as Record<string, unknown>;
-    expect(token).toMatchObject({ uid: "u1", role: "DENTIST", sv: 7 });
+    expect(token).toMatchObject({ uid: "u1", role: "DENTIST", sid: "s1", sst: "secret" });
     const session = authConfig.callbacks.session({
       session: { user: { email: "x" }, expires: "" },
       token,
-    } as never) as unknown as { user: { id: string }; sessionVersion: number };
+    } as never) as unknown as { user: { id: string }; sessionId: string; sessionSecret: string };
     expect(session.user.id).toBe("u1");
-    expect(session.sessionVersion).toBe(7);
+    expect(session).toMatchObject({ sessionId: "s1", sessionSecret: "secret" });
   });
 });
 
 describe("verifyCredentials (login)", () => {
+  const login = (email: string, password = PASSWORD) => verifyCredentials({ email, password }, freshIp());
+
   it("accepts valid credentials and returns no password hash", async () => {
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account());
-    const result = await verifyCredentials({ email: "Dana@ismile.test", password: PASSWORD }, freshIp());
-    expect(result).toEqual({
+    mocks.repo.findCredentials.mockResolvedValue([account()]);
+    await expect(login("Dana@ismile.test")).resolves.toEqual({
       ok: true,
-      user: { id: "cuser00000000000000000001", email: "dana@ismile.test", name: "Dana", role: "DENTIST", sessionVersion: 4 },
+      user: { id: USER_ID, email: "dana@ismile.test", name: "Dana", role: "DENTIST" },
     });
-    expect(mocks.repo.findCredentialsByEmail).toHaveBeenCalledWith("dana@ismile.test");
-    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "auth.login.succeeded" }));
+    expect(mocks.repo.findCredentials).toHaveBeenCalledWith("dana@ismile.test");
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "auth.login.succeeded", clinicId: CLINIC_ID }));
+  });
+
+  it("signs in with a staff ID", async () => {
+    mocks.repo.findCredentials.mockResolvedValue([account()]);
+    expect((await login("fd-003")).ok).toBe(true);
+    expect(mocks.repo.findCredentials).toHaveBeenCalledWith("FD-003");
+  });
+
+  it("refuses an email that matches accounts in two clinics", async () => {
+    mocks.repo.findCredentials.mockResolvedValue([account(), account({ id: "other" })]);
+    expect((await login("dup@ismile.test")).ok).toBe(false);
   });
 
   it("rejects a wrong password with a generic reason", async () => {
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account());
-    await expect(verifyCredentials({ email: "dana@ismile.test", password: "nope nope nope" }, freshIp())).resolves.toEqual({
-      ok: false,
-      reason: "invalid_credentials",
-    });
+    mocks.repo.findCredentials.mockResolvedValue([account()]);
+    await expect(login("dana@ismile.test", "nope nope nope")).resolves.toEqual({ ok: false, reason: "invalid_credentials" });
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "auth.login.failed" }));
   });
 
   it("gives the same answer for unknown accounts (no enumeration)", async () => {
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(null);
-    await expect(verifyCredentials({ email: "ghost@ismile.test", password: PASSWORD }, freshIp())).resolves.toEqual({
-      ok: false,
-      reason: "invalid_credentials",
-    });
+    mocks.repo.findCredentials.mockResolvedValue([]);
+    await expect(login("ghost@ismile.test")).resolves.toEqual({ ok: false, reason: "invalid_credentials" });
   });
 
-  it("rejects disabled accounts and disabled clinics even with the right password", async () => {
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account({ isActive: false }));
-    expect((await verifyCredentials({ email: "dana@ismile.test", password: PASSWORD }, freshIp())).ok).toBe(false);
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account({ clinic: { isActive: false } }));
-    expect((await verifyCredentials({ email: "dana@ismile.test", password: PASSWORD }, freshIp())).ok).toBe(false);
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account({ passwordHash: null })); // invite pending
-    expect((await verifyCredentials({ email: "dana@ismile.test", password: PASSWORD }, freshIp())).ok).toBe(false);
+  it("locks the account at the clinic's limit of wrong passwords", async () => {
+    mocks.repo.findCredentials.mockResolvedValue([account()]);
+    mocks.repo.countRecentFailedLogins.mockResolvedValueOnce(4);
+    await login("lock1@ismile.test", "wrong wrong wrong");
+    expect(mocks.repo.setStatus).not.toHaveBeenCalled();
+
+    mocks.repo.countRecentFailedLogins.mockResolvedValueOnce(5);
+    await login("lock2@ismile.test", "wrong wrong wrong");
+    expect(mocks.repo.setStatus).toHaveBeenCalledWith(USER_ID, "suspended", expect.anything());
+    expect(mocks.repo.revokeUserSessions).toHaveBeenCalledWith(USER_ID, expect.anything());
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "user.locked" }), expect.anything());
+  });
+
+  it("does not lock when the clinic rule is off", async () => {
+    mocks.repo.findCredentials.mockResolvedValue([account({ clinic: { settings: { signIn: { lockAfterFailedLogins: false } } } })]);
+    await login("nolock@ismile.test", "wrong wrong wrong");
+    expect(mocks.repo.countRecentFailedLogins).not.toHaveBeenCalled();
+    expect(mocks.repo.setStatus).not.toHaveBeenCalled();
+  });
+
+  it("refuses suspended, disabled and invited accounts even with the right password", async () => {
+    for (const status of ["suspended", "disabled", "invited"]) {
+      mocks.repo.findCredentials.mockResolvedValue([account({ status })]);
+      expect((await login(status + "@ismile.test")).ok).toBe(false);
+    }
+    mocks.repo.findCredentials.mockResolvedValue([account({ passwordHash: null })]);
+    expect((await login("nopw@ismile.test")).ok).toBe(false);
   });
 
   it("throttles repeated attempts against one email", async () => {
-    mocks.repo.findCredentialsByEmail.mockResolvedValue(account());
+    mocks.repo.findCredentials.mockResolvedValue([account()]);
     const email = "throttle@ismile.test";
-    for (let i = 0; i < 5; i++) {
-      expect((await verifyCredentials({ email, password: "wrong wrong wrong" }, freshIp())).ok).toBe(false);
-    }
+    for (let i = 0; i < 5; i++) expect((await login(email, "wrong wrong wrong")).ok).toBe(false);
     // Even the correct password is refused once the bucket is exhausted.
-    await expect(verifyCredentials({ email, password: PASSWORD }, freshIp())).resolves.toEqual({ ok: false, reason: "rate_limited" });
+    await expect(login(email)).resolves.toEqual({ ok: false, reason: "rate_limited" });
   });
 });
 
@@ -218,7 +250,7 @@ describe("changePassword", () => {
 
   it("re-hashes, revokes sessions and outstanding reset tokens", async () => {
     mocks.repo.findPasswordHash.mockResolvedValue({ passwordHash });
-    const user = makeUser("RECEPTIONIST");
+    const user = makeUser("FRONT_DESK");
     await changePassword(user, { currentPassword: PASSWORD, newPassword: "blue-tooth brush 42", confirmPassword: "blue-tooth brush 42" });
     const [id, newHash] = mocks.repo.setPassword.mock.calls[0];
     expect(id).toBe(user.id);
@@ -238,14 +270,14 @@ describe("password reset", () => {
   });
 
   it("is single-use even under concurrent submissions", async () => {
-    mocks.repo.findValidToken.mockResolvedValue({ id: "t1", userId: "u1", purpose: "RESET", user: { isActive: true, clinicId: null } });
+    mocks.repo.findValidToken.mockResolvedValue({ id: "t1", userId: "u1", purpose: "reset", user: { status: "active", clinicId: CLINIC_ID } });
     mocks.repo.consumeToken.mockResolvedValue(false); // another request consumed it first
     await expect(resetPassword(input)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(mocks.repo.setPassword).not.toHaveBeenCalled();
   });
 
   it("sets the password, revokes sessions and invalidates other tokens", async () => {
-    mocks.repo.findValidToken.mockResolvedValue({ id: "t1", userId: "u1", purpose: "RESET", user: { isActive: true, clinicId: null } });
+    mocks.repo.findValidToken.mockResolvedValue({ id: "t1", userId: "u1", purpose: "reset", user: { status: "active", clinicId: CLINIC_ID } });
     mocks.repo.consumeToken.mockResolvedValue(true);
     await resetPassword(input);
     expect(mocks.repo.setPassword).toHaveBeenCalledWith("u1", expect.stringMatching(/^\$argon2id\$/), expect.anything());
@@ -257,9 +289,9 @@ describe("password reset", () => {
     await expect(requestPasswordReset({ email: "ghost@ismile.test" }, freshIp())).resolves.toBeUndefined();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
 
-    mocks.repo.findActiveUserByEmail.mockResolvedValue({ id: "u1", email: "dana@ismile.test", name: "Dana", clinicId: null });
+    mocks.repo.findActiveUserByEmail.mockResolvedValue({ id: "u1", email: "dana@ismile.test", fullName: "Dana", clinicId: CLINIC_ID });
     await expect(requestPasswordReset({ email: "dana@ismile.test" }, freshIp())).resolves.toBeUndefined();
-    expect(mocks.repo.createPasswordToken).toHaveBeenCalledWith("u1", expect.stringMatching(/^[a-f0-9]{64}$/), "RESET", expect.any(Date));
+    expect(mocks.repo.createPasswordToken).toHaveBeenCalledWith("u1", expect.stringMatching(/^[a-f0-9]{64}$/), "reset", expect.any(Date));
     const sentText: string = mocks.sendEmail.mock.calls[0][0].text;
     const storedHash = mocks.repo.createPasswordToken.mock.calls[0][1];
     const sentToken = new URL(sentText.match(/https?:\/\/\S+/)![0]).searchParams.get("token")!;
@@ -267,7 +299,7 @@ describe("password reset", () => {
   });
 
   it("issues reset tokens that expire in 30 minutes", async () => {
-    mocks.repo.findActiveUserByEmail.mockResolvedValue({ id: "u2", email: "x@ismile.test", name: "X", clinicId: null });
+    mocks.repo.findActiveUserByEmail.mockResolvedValue({ id: "u2", email: "x@ismile.test", fullName: "X", clinicId: CLINIC_ID });
     const before = Date.now();
     await requestPasswordReset({ email: "x@ismile.test" }, freshIp());
     const expiresAt: Date = mocks.repo.createPasswordToken.mock.calls[0][3];
