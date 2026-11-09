@@ -1,3 +1,12 @@
-// The clinic operates in the Philippines (UTC+8, no daylight saving).
-export const CLINIC_TIME_ZONE = "Asia/Manila";
-export const CLINIC_UTC_OFFSET = "+08:00";
+export {
+  CLINIC_TIME_ZONE,
+  CLINIC_UTC_OFFSET,
+  addDays,
+  clinicDateOf,
+  clinicInstant,
+  clinicMinutesOf,
+  clinicToday,
+  minutesToTime,
+  timeToMinutes,
+  weekdayOf,
+} from "@backend/config/clinic";

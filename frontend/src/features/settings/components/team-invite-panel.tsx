@@ -13,9 +13,7 @@ import { inviteUserSchema } from "@backend/features/users/user.schema";
 import type { InviteOptions } from "@backend/features/users/users.types";
 import type { Role } from "@backend/config/permissions";
 import { RolePicker } from "./role-picker";
-
-const inputClass =
-  "h-12 rounded-full border-[#D5DCE5] bg-white px-[18px] text-[15px] md:text-[15px] placeholder:text-[#8A97A8] focus-visible:border-[#1D5296] focus-visible:ring-[#1D5296]/15";
+import { inputClass } from "@/components/forms/styles";
 
 interface TeamInvitePanelProps {
   editorName: string;

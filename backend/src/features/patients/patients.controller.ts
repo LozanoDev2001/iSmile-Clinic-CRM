@@ -1,25 +1,26 @@
-import "server-only";
+"use server";
 
-/**
- * Patients controller — HTTP entry layer, mounted by the thin route files in
- * src/app/api/patients. Authenticates, extracts request input, delegates to
- * the service (validation, permissions, scoping) and shapes the JSON
- * response. Errors are converted centrally by withApiHandler.
- */
-import { ok, withApiHandler } from "@backend/lib/api/response";
+import { revalidatePath } from "next/cache";
+import { runAction, type ActionResult } from "@backend/lib/api/response";
 import { requireAuth } from "@backend/lib/authorization";
-import { getPatient, listPatients } from "./patients.service";
+import { createPatient, updatePatient } from "./patients.service";
+import type { PatientClinicalInput, PatientInput } from "./patients.types";
 
-/** GET /api/patients?page=1&pageSize=25&search=smi — scoped to the caller's clinic/branches. */
-export const listPatientsHandler = withApiHandler(async (request, { requestId }) => {
-  const user = await requireAuth();
-  const result = await listPatients(user, Object.fromEntries(request.nextUrl.searchParams));
-  return ok(result, { requestId });
-});
+/** One flat form: patient fields plus, when `withClinical`, the clinical fields (each schema keeps only its own keys). */
+type PatientFormValues = PatientInput & Partial<PatientClinicalInput>;
 
-/** GET /api/patients/:id — medical fields included only with `patients.medical.read`. */
-export const getPatientHandler = withApiHandler<{ id: string }>(async (_request, { params, requestId }) => {
-  const user = await requireAuth();
-  const { id } = await params;
-  return ok(await getPatient(user, id), { requestId });
-});
+export async function createPatientAction(values: PatientFormValues, withClinical: boolean): Promise<ActionResult<{ id: string }>> {
+  return runAction(async () => {
+    const created = await createPatient(await requireAuth(), values, withClinical ? values : undefined);
+    revalidatePath("/patients", "layout");
+    return created;
+  }, "Patient added.");
+}
+
+export async function updatePatientAction(id: string, values: PatientFormValues, withClinical: boolean): Promise<ActionResult<{ id: string }>> {
+  return runAction(async () => {
+    await updatePatient(await requireAuth(), id, values, withClinical ? values : undefined);
+    revalidatePath("/patients", "layout");
+    return { id };
+  }, "Patient details saved.");
+}

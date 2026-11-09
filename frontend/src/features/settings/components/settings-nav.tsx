@@ -13,10 +13,10 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { title: "Clinic profile", description: "Name, logo, hours, services" },
+  { title: "Clinic profile", description: "Name, hours, services", href: "/settings/clinic" },
   { title: "Team & roles", description: "Accounts, windows and tabs", href: "/settings/team" },
   { title: "My profile", description: "Your name, password and devices", href: "/profile" },
-  { title: "Services & prices", description: "Price list used on invoices" },
+  { title: "Services & prices", description: "Price list used on invoices", href: "/settings/services" },
   { title: "Cancellation process", description: "Who can void invoices" },
   { title: "Integrations", description: "Chat apps, phone, payments" },
   { title: "Notifications", description: "Reminders patients receive" },

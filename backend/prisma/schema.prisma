@@ -94,32 +94,41 @@ model User {
 }
 
 model Patient {
-  id               String            @id @default(uuid()) @db.Char(36)
-  clinicId         String            @map("clinic_id") @db.Char(36)
-  contactId        String            @unique(map: "contact_id") @map("contact_id") @db.Char(36)
-  patientNo        String            @map("patient_no") @db.VarChar(255)
-  dob              DateTime?         @db.Date
-  sex              String?           @db.VarChar(255)
-  medicalAlerts    String?           @map("medical_alerts") @db.Text
-  primaryDentistId String?           @map("primary_dentist_id") @db.Char(36)
-  status           String            @default("active") @db.VarChar(255)
-  createdAt        DateTime          @default(now()) @map("created_at")
-  appointments     Appointment[]
-  automationJobs   AutomationJob[]
-  clinicalFiles    ClinicalFile[]
-  encounters       Encounter[]
-  invoices         Invoice[]
-  leads            Lead[]
-  patientGuardians PatientGuardian[]
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "patients_ibfk_1")
-  contact          Contact           @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "patients_ibfk_2")
-  primaryDentist   User?             @relation(fields: [primaryDentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_ibfk_3")
-  paymentPlans     PaymentPlan[]
-  payments         Payment[]
-  treatmentPlans   TreatmentPlan[]
+  id                String            @id @default(uuid()) @db.Char(36)
+  clinicId          String            @map("clinic_id") @db.Char(36)
+  contactId         String            @unique(map: "contact_id") @map("contact_id") @db.Char(36)
+  patientNo         String            @map("patient_no") @db.VarChar(255)
+  dob               DateTime?         @db.Date
+  sex               String?           @db.VarChar(255)
+  medicalAlerts     String?           @map("medical_alerts") @db.Text
+  medicalConditions String?           @map("medical_conditions") @db.Text
+  medications       String?           @db.Text
+  civilStatus       String?           @map("civil_status") @db.VarChar(40)
+  occupation        String?           @db.VarChar(120)
+  payerId           String?           @map("payer_id") @db.Char(36)
+  hmoMemberNo       String?           @map("hmo_member_no") @db.VarChar(60)
+  scPwdId           String?           @map("sc_pwd_id") @db.VarChar(60)
+  primaryDentistId  String?           @map("primary_dentist_id") @db.Char(36)
+  status            String            @default("active") @db.VarChar(255)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  appointments      Appointment[]
+  automationJobs    AutomationJob[]
+  clinicalFiles     ClinicalFile[]
+  encounters        Encounter[]
+  invoices          Invoice[]
+  leads             Lead[]
+  patientGuardians  PatientGuardian[]
+  clinic            Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "patients_ibfk_1")
+  contact           Contact           @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "patients_ibfk_2")
+  primaryDentist    User?             @relation(fields: [primaryDentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_ibfk_3")
+  payer             Payer?            @relation(fields: [payerId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_payer_fkey")
+  paymentPlans      PaymentPlan[]
+  payments          Payment[]
+  treatmentPlans    TreatmentPlan[]
 
   @@unique([clinicId, patientNo], map: "clinic_id")
   @@index([primaryDentistId], map: "primary_dentist_id")
+  @@index([payerId], map: "payer_id")
   @@map("patients")
 }
 
@@ -321,6 +330,7 @@ model Contact {
   email            String?           @db.VarChar(255)
   phone            String?           @db.VarChar(255)
   preferredChannel String?           @map("preferred_channel") @db.VarChar(255)
+  address          String?           @db.VarChar(255)
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
   clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "contacts_ibfk_1")
@@ -575,6 +585,7 @@ model Payer {
   payerType String    @map("payer_type") @db.VarChar(255)
   claims    Claim[]
   invoices  Invoice[]
+  patients  Patient[]
   clinic    Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payers_ibfk_1")
 
   @@index([clinicId], map: "clinic_id")
@@ -724,6 +735,7 @@ model Service {
   price           Decimal         @db.Decimal(12, 2)
   durationMinutes Int?            @map("duration_minutes")
   taxType         String          @default("exempt") @map("tax_type") @db.VarChar(255)
+  hmoCoverable    Boolean         @default(false) @map("hmo_coverable")
   active          Boolean         @default(true)
   appointments    Appointment[]
   invoiceItems    InvoiceItem[]

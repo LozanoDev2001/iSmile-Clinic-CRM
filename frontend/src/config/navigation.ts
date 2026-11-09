@@ -58,7 +58,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Patients",
     icon: Users,
     permission: "patients.read",
-    comingSoon: "Search patient records, contact details and treatment history.",
   },
   {
     key: "messaging",
@@ -75,7 +74,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Calendar",
     icon: CalendarDays,
     permission: "appointments.read",
-    comingSoon: "Book, move and confirm appointments across dentists and branches.",
   },
   {
     key: "billing",

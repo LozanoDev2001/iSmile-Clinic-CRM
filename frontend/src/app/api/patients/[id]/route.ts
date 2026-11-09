@@ -1,1 +1,1 @@
-export { getPatientHandler as GET } from "@backend/features/patients/patients.controller";
+export { getPatientHandler as GET } from "@backend/features/patients/patients.api.controller";
