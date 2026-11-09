@@ -9,32 +9,31 @@ import { useActionForm } from "@/hooks/use-action-form";
 import { cn } from "@/lib/utils";
 import { archiveServiceAction, createServiceAction, updateServiceAction } from "@backend/features/catalog/catalog.controller";
 import { serviceInputSchema } from "@backend/features/catalog/catalog.schema";
-import { TAX_TYPE_LABELS, VAT_RATE, type CatalogService, type TaxType } from "@backend/features/catalog/catalog.types";
+import { VAT_RATE, round2 } from "@backend/features/billing/billing.calc";
+import { SERVICE_KIND_LABELS, type CatalogService, type ServiceKind } from "@backend/features/catalog/catalog.types";
 import { primaryButtonClass, fieldLabelsClass, inputClass, selectClass } from "@/components/forms/styles";
 
-type Filter = "all" | TaxType;
+type Filter = "all" | ServiceKind;
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "exempt", label: "Dental services" },
-  { id: "vat", label: "Medicines and products" },
+  { id: "service", label: "Dental services" },
+  { id: "product", label: "Medicines and products" },
 ];
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
-const invoicePrice = (s: CatalogService) => (s.taxType === "vat" ? Math.round(s.price * (1 + VAT_RATE) * 100) / 100 : s.price);
-
 const rowButton = "h-8 rounded-full px-3 text-[13px] disabled:opacity-50";
 
-export function PriceList({ services, canEdit }: { services: CatalogService[]; canEdit: boolean }) {
+export function PriceList({ services, canEdit, vatRegistered }: { services: CatalogService[]; canEdit: boolean; vatRegistered: boolean }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<CatalogService | "new" | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [removing, startRemove] = useTransition();
 
-  const shown = services.filter((s) => filter === "all" || s.taxType === filter);
-  const countFor = (id: Filter) => (id === "all" ? services.length : services.filter((s) => s.taxType === id).length);
+  const shown = services.filter((s) => filter === "all" || s.kind === filter);
+  const countFor = (id: Filter) => (id === "all" ? services.length : services.filter((s) => s.kind === id).length);
 
   const remove = (service: CatalogService) =>
     startRemove(async () => {
@@ -59,8 +58,11 @@ export function PriceList({ services, canEdit }: { services: CatalogService[]; c
         <div className="flex max-w-2xl flex-col gap-1">
           <h2 className="text-xl font-normal">Services &amp; prices</h2>
           <p className="text-[13px] text-[#5E6B7E]">
-            The price list used on every sales invoice and at checkout. Prices are before VAT. Dental services are VAT-exempt;{" "}
-            {VAT_RATE * 100}% VAT is added to medicines and products on the invoice. Changes apply to new invoices straight away.
+            The price list used on every sales invoice and at checkout.{" "}
+            {vatRegistered
+              ? `Prices are before VAT; ${VAT_RATE * 100}% VAT is added on the invoice, except for senior citizens and PWDs.`
+              : "The clinic is not VAT-registered, so no VAT is added."}{" "}
+            Changes apply to new invoices straight away.
           </p>
         </div>
         {canEdit && editing === null ? (
@@ -97,7 +99,7 @@ export function PriceList({ services, canEdit }: { services: CatalogService[]; c
               <th className="py-2 pr-3 font-normal">Type</th>
               <th className="py-2 pr-3 font-normal">HMO</th>
               <th className="py-2 pr-3 text-right font-normal">Price</th>
-              <th className="py-2 pr-3 text-right font-normal">On the invoice</th>
+              {vatRegistered ? <th className="py-2 pr-3 text-right font-normal">With {VAT_RATE * 100}% VAT</th> : null}
               {canEdit ? <th className="py-2 font-normal"><span className="sr-only">Actions</span></th> : null}
             </tr>
           </thead>
@@ -108,13 +110,10 @@ export function PriceList({ services, canEdit }: { services: CatalogService[]; c
               return (
                 <tr key={s.id} className={cn("border-b border-[#EDF0F4]", isEditing && "bg-[#EEF3FA]", isConfirming && "bg-[#FDF0EE]")}>
                   <td className="py-2.5 pr-3">{s.name}</td>
-                  <td className="py-2.5 pr-3 text-[#46566B]">{TAX_TYPE_LABELS[s.taxType]}</td>
+                  <td className="py-2.5 pr-3 text-[#46566B]">{SERVICE_KIND_LABELS[s.kind]}</td>
                   <td className="py-2.5 pr-3 text-[#46566B]">{s.hmoCoverable ? "Yes" : "No"}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums">{peso.format(s.price)}</td>
-                  <td className="py-2.5 pr-3 text-right tabular-nums">
-                    {peso.format(invoicePrice(s))}
-                    <span className="block text-[11px] text-[#5E6B7E]">{s.taxType === "vat" ? `incl. ${VAT_RATE * 100}% VAT` : "VAT-exempt"}</span>
-                  </td>
+                  {vatRegistered ? <td className="py-2.5 pr-3 text-right tabular-nums">{peso.format(round2(s.price * (1 + VAT_RATE)))}</td> : null}
                   {canEdit ? (
                     <td className="py-2.5 text-right whitespace-nowrap">
                       {isConfirming ? (
@@ -157,8 +156,8 @@ function ServiceForm({ service, onDone, onCancel }: { service: CatalogService | 
   const { form, onSubmit, isPending } = useActionForm({
     schema: serviceInputSchema,
     defaultValues: service
-      ? { name: service.name, price: String(service.price), taxType: service.taxType, hmoCoverable: service.hmoCoverable }
-      : { name: "", price: "", taxType: "exempt", hmoCoverable: false },
+      ? { name: service.name, price: String(service.price), kind: service.kind, hmoCoverable: service.hmoCoverable }
+      : { name: "", price: "", kind: "service", hmoCoverable: false },
     action: (values) => (service ? updateServiceAction(service.id, values) : createServiceAction(values)),
     onSuccess: onDone,
   });
@@ -172,9 +171,9 @@ function ServiceForm({ service, onDone, onCancel }: { service: CatalogService | 
         <FormTextField form={form} name="price" label="Price before VAT (₱)" inputMode="decimal" placeholder="e.g. 1500" autoComplete="off" className={inputClass} />
         <label className="flex flex-col gap-2 text-sm text-[#46566B]">
           Type
-          <select className={selectClass} {...form.register("taxType")}>
-            <option value="exempt">{TAX_TYPE_LABELS.exempt} (VAT-exempt)</option>
-            <option value="vat">{TAX_TYPE_LABELS.vat} (+{VAT_RATE * 100}% VAT)</option>
+          <select className={selectClass} {...form.register("kind")}>
+            <option value="service">{SERVICE_KIND_LABELS.service}</option>
+            <option value="product">{SERVICE_KIND_LABELS.product}</option>
           </select>
         </label>
       </div>

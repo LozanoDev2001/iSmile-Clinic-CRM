@@ -25,12 +25,12 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   code: "PROPH",
   name: "Oral prophylaxis (cleaning)",
   price: new Prisma.Decimal("1300.00"),
-  taxType: "exempt",
+  kind: "service",
   hmoCoverable: true,
   ...overrides,
 });
 
-const input = { name: "  Fluoride   varnish ", price: 800, taxType: "exempt" as const, hmoCoverable: true };
+const input = { name: "  Fluoride   varnish ", price: 800, kind: "service" as const, hmoCoverable: true };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -45,7 +45,7 @@ describe("listServices", () => {
     mocks.repo.listActive.mockResolvedValue([row()]);
     const list = await listServices(owner);
     expect(mocks.repo.listActive).toHaveBeenCalledWith(CLINIC_A);
-    expect(list).toEqual([expect.objectContaining({ price: 1300, taxType: "exempt" })]);
+    expect(list).toEqual([expect.objectContaining({ price: 1300, kind: "service" })]);
   });
 });
 

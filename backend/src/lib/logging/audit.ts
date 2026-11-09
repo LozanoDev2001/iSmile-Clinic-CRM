@@ -40,7 +40,12 @@ export const AUDIT_ACTIONS = {
   APPOINTMENT_RESCHEDULED: "appointment.rescheduled",
   APPOINTMENT_STATUS_CHANGED: "appointment.status_changed",
   APPOINTMENT_CANCELLED: "appointment.cancelled",
+  INVOICE_ISSUED: "invoice.issued",
   INVOICE_ADJUSTED: "invoice.adjusted",
+  INVOICE_VOID_REQUESTED: "invoice.void_requested",
+  INVOICE_VOID_DECLINED: "invoice.void_declined",
+  INVOICE_VOIDED: "invoice.voided",
+  PAYMENT_RECORDED: "payment.recorded",
   PAYMENT_CORRECTED: "payment.corrected",
 } as const;
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PATIENT_FILTERS } from "@backend/features/patients/patient.schema";
+import { getPatientBilling } from "@backend/features/billing/billing.service";
 import { getPatientFile, getPatientFilterCounts, listPatients } from "@backend/features/patients/patients.service";
 import type { PatientFilter } from "@backend/features/patients/patients.types";
 import { can, type AuthUser } from "@backend/lib/authorization";
@@ -33,6 +34,7 @@ export async function PatientsWorkspace({ user, params, selectedId }: { user: Au
   ]);
   const fileId = selectedId ?? result.items[0]?.id;
   const patient = fileId ? await getPatientFile(user, fileId) : null;
+  const billing = patient ? await getPatientBilling(user, patient.id) : null;
   const tab: PatientTab = params.tab === "history" && patient?.visits ? "history" : "profile";
 
   const tabHref = (id: string) => (t: PatientTab) => {
@@ -61,7 +63,7 @@ export async function PatientsWorkspace({ user, params, selectedId }: { user: Au
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] lg:items-start">
         <PatientList result={result} counts={counts} query={query} selectedId={patient?.id} />
         {patient ? (
-          <PatientFile patient={patient} tab={tab} tabHref={tabHref(patient.id)} canEdit={can(user, "patients.update")} canBook={can(user, "appointments.create")} />
+          <PatientFile patient={patient} tab={tab} tabHref={tabHref(patient.id)} canEdit={can(user, "patients.update")} canBook={can(user, "appointments.create")} billing={billing} />
         ) : (
           <section className="glass-card rounded-[24px] p-10 text-center text-sm text-[#5E6B7E]">
             {counts.all ? "Pick a patient from the list." : "No patients yet. Add the first one with New patient."}

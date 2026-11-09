@@ -13,7 +13,7 @@ export default async function ClinicProfilePage() {
   if (!allowed) return <AccessDenied />;
 
   const [profile, services] = await Promise.all([getClinicProfile(user), listServices(user)]);
-  const servicesOffered = services.filter((s) => s.taxType === "exempt").map((s) => s.name);
+  const servicesOffered = services.filter((s) => s.kind === "service").map((s) => s.name);
 
   return (
     <SettingsShell>

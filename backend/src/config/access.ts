@@ -220,7 +220,8 @@ const MODULE_GRANTS: Record<ModuleKey, Grant> = {
   dash_frontdesk: { view: ["dashboards.frontdesk"] },
   dash_dentist: { view: ["dashboards.dentist"] },
   dash_accounts: { view: ["dashboards.accounts"] },
-  dash_owner: { view: ["dashboards.owner"] },
+  // Approving (cancelling) invoices goes with the owner dashboard, where approvals wait.
+  dash_owner: { view: ["dashboards.owner", "billing.approve"] },
   crwdforce: { view: ["crwdforce.read"], full: ["crwdforce.update"] },
   leads: { view: ["leads.read"], full: ["leads.create", "leads.update"] },
   contacts: { view: ["contacts.read"], full: ["contacts.update"] },

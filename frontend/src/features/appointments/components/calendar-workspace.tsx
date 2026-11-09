@@ -1,5 +1,6 @@
 import { clinicToday } from "@/config/clinic";
 import { getBookingOptions, listAppointments } from "@backend/features/appointments/appointments.service";
+import { getInvoicesForAppointments } from "@backend/features/billing/billing.service";
 import type { AppointmentStatus } from "@backend/features/appointments/appointments.types";
 import { getPatientSummary } from "@backend/features/patients/patients.service";
 import { openingHoursOn } from "@backend/features/settings/settings.types";
@@ -28,6 +29,7 @@ export async function CalendarWorkspace({ user, params }: { user: AuthUser; para
   const now = new Date();
   const next = range.from <= today && today <= range.to ? visible.find((a) => WAITING.includes(a.status) && a.endsAt > now) : undefined;
   const selected = state.appt ? appointments.find((a) => a.id === state.appt) : undefined;
+  const invoices = selected?.status === "completed" ? await getInvoicesForAppointments(user, [selected.id]) : {};
   const preselected = state.form === "new" && state.patient && can(user, "patients.read") ? await getPatientSummary(user, state.patient) : null;
   const hours = openingHoursOn(options.hours, state.date);
   const canBook = can(user, "appointments.create");
@@ -50,6 +52,8 @@ export async function CalendarWorkspace({ user, params }: { user: AuthUser; para
               moveHref={calendarHref(state, { form: "move" })}
               canUpdate={can(user, "appointments.update")}
               canCancel={can(user, "appointments.cancel")}
+              invoice={invoices[selected.id] ?? null}
+              canInvoice={can(user, "billing.create")}
             />
           ) : null}
         </div>

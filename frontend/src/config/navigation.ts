@@ -81,7 +81,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Billing",
     icon: CreditCard,
     permission: "billing.read",
-    comingSoon: "Invoices, payments, HMO claims and the clinic's cash position.",
   },
   {
     key: "reports",

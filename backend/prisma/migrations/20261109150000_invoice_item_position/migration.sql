@@ -1,0 +1,2 @@
+-- Keeps invoice lines in the order they were entered.
+ALTER TABLE `invoice_items` ADD COLUMN `position` INTEGER NOT NULL DEFAULT 0;

@@ -27,7 +27,7 @@ export function clinicProfileFrom(name: string, settings: unknown): ClinicProfil
   const stored = (settings as { profile?: unknown } | null)?.profile;
   const parsed = clinicProfileSchema.omit({ name: true }).safeParse(stored);
   if (parsed.success) return { name, ...parsed.data };
-  return { name, tagline: "", phone: "", address: "", hours: DEFAULT_HOURS };
+  return { name, tagline: "", phone: "", address: "", vatRegistered: true, hours: DEFAULT_HOURS };
 }
 
 /** Opening hours for a calendar date (YYYY-MM-DD). WEEKDAYS starts on Monday; weekdayOf() counts from Sunday. */

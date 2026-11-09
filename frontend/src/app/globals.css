@@ -273,3 +273,18 @@
   background: linear-gradient(135deg, #21507f 0%, #0e2a47 70%);
   box-shadow: 0 8px 18px rgba(14, 42, 71, 0.22);
 }
+
+/* Printing an invoice prints only the invoice, not the app around it. */
+@media print {
+  body:has(.invoice-document) * {
+    visibility: hidden;
+  }
+  body:has(.invoice-document) .invoice-document,
+  body:has(.invoice-document) .invoice-document * {
+    visibility: visible;
+  }
+  body:has(.invoice-document) .invoice-document {
+    position: absolute;
+    inset: 0;
+  }
+}

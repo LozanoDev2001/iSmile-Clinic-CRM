@@ -13,7 +13,7 @@ type ServiceRow = NonNullable<Awaited<ReturnType<typeof catalogRepository.findAc
 const DUPLICATE_NAME = "A service with this name is already on the list.";
 
 function toCatalogService(row: ServiceRow): CatalogService {
-  return { ...row, price: row.price.toNumber(), taxType: row.taxType === "vat" ? "vat" : "exempt" };
+  return { ...row, price: row.price.toNumber(), kind: row.kind === "product" ? "product" : "service" };
 }
 
 async function assertNameFree(clinicId: string, name: string, excludeId: string | undefined, tx: TransactionClient) {
@@ -57,7 +57,7 @@ export async function updateService(actor: AuthUser, rawId: unknown, input: Serv
         resourceId: id,
         actorId: actor.id,
         clinicId: actor.clinicId,
-        before: { name: existing.name, price: existing.price.toNumber(), taxType: existing.taxType, hmoCoverable: existing.hmoCoverable },
+        before: { name: existing.name, price: existing.price.toNumber(), kind: existing.kind, hmoCoverable: existing.hmoCoverable },
         metadata: data,
       },
       tx,

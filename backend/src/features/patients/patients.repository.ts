@@ -214,7 +214,7 @@ export const patientsRepository = {
   },
 
   exists(scope: RecordScope, id: string, tx: TransactionClient) {
-    return tx.patient.findFirst({ where: { AND: [scopeWhere(scope), { id }] }, select: { id: true, contactId: true } });
+    return tx.patient.findFirst({ where: { AND: [scopeWhere(scope), { id }] }, select: { id: true, contactId: true, payerId: true } });
   },
 
   async create(clinicId: string, patientNo: string, data: PatientData, clinical: PatientClinicalData | null, tx: TransactionClient) {

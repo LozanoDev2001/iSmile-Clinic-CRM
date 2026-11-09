@@ -10,17 +10,27 @@ import { clinicDateOf, clinicToday } from "@/config/clinic";
 import { cn } from "@/lib/utils";
 import { cancelAppointmentAction, changeAppointmentStatusAction } from "@backend/features/appointments/appointments.controller";
 import type { AppointmentStatus, BookingSource, CalendarAppointment } from "@backend/features/appointments/appointments.types";
+import type { InvoiceSummary } from "@backend/features/billing/billing.types";
 import { SOURCE_LABELS, STATUS_META, formatShortDate } from "../calendar-state";
 import { timeRange } from "./appointment-card";
 
 type NextStatus = Exclude<AppointmentStatus, "booked" | "cancelled">;
 
-const JOURNEY: { label: string; reachedAt: AppointmentStatus[] }[] = [
+const VISIT_STEPS: { label: string; reachedAt: AppointmentStatus[] }[] = [
   { label: "Booked", reachedAt: ["booked", "confirmed", "checked_in", "in_progress", "completed"] },
   { label: "Checked in", reachedAt: ["checked_in", "in_progress", "completed"] },
   { label: "In the chair", reachedAt: ["in_progress", "completed"] },
   { label: "Visit finished", reachedAt: ["completed"] },
 ];
+
+/** The visit's steps, then invoicing and payment. */
+function journey(status: AppointmentStatus, invoice: InvoiceSummary | null) {
+  return [
+    ...VISIT_STEPS.map((s) => ({ label: s.label, done: s.reachedAt.includes(status) })),
+    { label: invoice ? `Invoiced · ${invoice.number}` : "Invoiced", done: !!invoice },
+    { label: invoice && invoice.balance > 0 ? `Paid · ${invoice.balance.toFixed(2)} still due` : "Paid", done: !!invoice && invoice.balance === 0 },
+  ];
+}
 
 interface AppointmentPanelProps {
   appointment: CalendarAppointment;
@@ -28,9 +38,11 @@ interface AppointmentPanelProps {
   moveHref: string;
   canUpdate: boolean;
   canCancel: boolean;
+  invoice: InvoiceSummary | null;
+  canInvoice: boolean;
 }
 
-export function AppointmentPanel({ appointment: a, closeHref, moveHref, canUpdate, canCancel }: AppointmentPanelProps) {
+export function AppointmentPanel({ appointment: a, closeHref, moveHref, canUpdate, canCancel, invoice, canInvoice }: AppointmentPanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -106,9 +118,9 @@ export function AppointmentPanel({ appointment: a, closeHref, moveHref, canUpdat
 
       {a.status === "no_show" ? null : (
         <ol aria-label="Patient journey" className="flex flex-col gap-2">
-          {JOURNEY.map((step, i) => {
-            const done = step.reachedAt.includes(a.status);
-            const current = !done && (i === 0 || JOURNEY[i - 1].reachedAt.includes(a.status));
+          {journey(a.status, invoice).map((step, i, steps) => {
+            const done = step.done;
+            const current = !done && (i === 0 || steps[i - 1].done);
             return (
               <li key={step.label} className={cn("flex items-center gap-2.5 text-sm", done || current ? "text-[#0E2A47]" : "text-[#5E6B7E]")}>
                 <span className={cn("grid size-5 place-items-center rounded-full text-[11px] text-white", done ? "bg-[#2E9E63]" : current ? "bg-[#1D5296]" : "bg-[#D5DCE5]")} aria-hidden>
@@ -167,7 +179,16 @@ export function AppointmentPanel({ appointment: a, closeHref, moveHref, canUpdat
           ) : null}
         </div>
       ) : null}
-      {a.status === "completed" ? <p className="text-xs text-[#5E6B7E]">Invoicing this visit arrives with the Billing module.</p> : null}
+      {a.status === "completed" && invoice ? (
+        <Link href={`/billing/invoices/${invoice.id}`} className="h-12 rounded-2xl bg-[#0E2A47] text-center text-sm leading-[48px] font-semibold text-white">
+          {invoice.balance > 0 ? `Collect balance on ${invoice.number}` : `View invoice ${invoice.number}`}
+        </Link>
+      ) : null}
+      {a.status === "completed" && !invoice && canInvoice ? (
+        <Link href={`/billing/checkout?appointment=${a.id}`} className="fill-orange h-12 rounded-2xl text-center text-sm leading-[48px] font-semibold text-[#0E2A47]">
+          Create invoice
+        </Link>
+      ) : null}
     </aside>
   );
 }

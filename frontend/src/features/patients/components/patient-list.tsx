@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { PATIENT_FILTERS } from "@backend/features/patients/patient.schema";
 import type { PatientFilter, PatientListResult } from "@backend/features/patients/patients.types";
 import { KID_MAX_AGE, ageFrom, daysToBirthday } from "../format";
-import { PatientSearch } from "./patient-search";
+import { SearchBox } from "@/components/shared/search-box";
 
 const BIRTHDAY_SOON_DAYS = 30;
 
@@ -49,7 +49,7 @@ export function PatientList({ result, counts, query, selectedId }: PatientListPr
   const pages = Math.max(1, Math.ceil(result.total / result.pageSize));
   return (
     <section aria-label="Patient list" className="glass-card flex min-w-0 flex-col gap-3 rounded-[24px] p-4">
-      <PatientSearch />
+      <SearchBox id="patient-search" label="Search patients" placeholder="Search name, patient no. or mobile" />
       <nav aria-label="Filter patients" className="flex flex-wrap gap-1.5">
         {PATIENT_FILTERS.map((f) => (
           <Link

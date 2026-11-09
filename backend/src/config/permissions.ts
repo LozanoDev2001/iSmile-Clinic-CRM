@@ -43,6 +43,7 @@ export const PERMISSIONS = [
   "billing.read",
   "billing.create",
   "billing.update",
+  "billing.approve",
 
   "reports.read",
 

@@ -5,7 +5,9 @@ import { Avatar } from "@/components/shared/avatar";
 import { Pill } from "@/components/shared/pill";
 import { clinicDateOf } from "@/config/clinic";
 import { cn } from "@/lib/utils";
+import type { PatientBilling } from "@backend/features/billing/billing.types";
 import type { PatientFile as PatientFileData } from "@backend/features/patients/patients.types";
+import { peso } from "@/features/billing/format";
 import { CHANNEL_LABELS, CIVIL_STATUS_LABELS, KID_MAX_AGE, SEX_LABELS, ageFrom, daysToBirthday, formatDate, formatDateTime, formatDay, labelOf } from "../format";
 import { DentalChart } from "./dental-chart";
 
@@ -51,9 +53,11 @@ interface PatientFileProps {
   tabHref: (tab: PatientTab) => string;
   canEdit: boolean;
   canBook: boolean;
+  /** Null when the user can't see billing. */
+  billing: PatientBilling | null;
 }
 
-export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook }: PatientFileProps) {
+export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billing }: PatientFileProps) {
   const age = ageFrom(p.dob);
   const child = age !== null && age <= KID_MAX_AGE;
   const birthdayIn = daysToBirthday(p.dob);
@@ -127,10 +131,18 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook }: Pati
         </Card>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className={cn("grid gap-3 sm:grid-cols-3", billing && "sm:grid-cols-2 xl:grid-cols-4")}>
             <Stat highlight label="Visits on record" value={p.visits ? String(p.visits.length) : "—"} note={p.visits ? (p.visits.length ? `Since ${formatDay(p.visits[p.visits.length - 1].occurredAt)}` : "No visits yet") : "Needs visit history access"} />
             <Stat label="Last visit" value={lastVisit ? formatDay(lastVisit.occurredAt) : "—"} note={lastVisit?.dentistName ?? "No visits yet"} />
             <Stat label="Next appointment" value={next ? formatDateTime(next.startsAt) : "—"} note={next ? [next.serviceName, next.dentistName].filter(Boolean).join(" · ") || "Booked" : "Nothing booked yet"} />
+            {billing ? (
+              <Stat
+                highlight={billing.balance > 0}
+                label="Balance"
+                value={peso(billing.balance)}
+                note={billing.balance > 0 ? "To collect at the next visit" : `Billed ${peso(billing.totalBilled)} in total`}
+              />
+            ) : null}
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">

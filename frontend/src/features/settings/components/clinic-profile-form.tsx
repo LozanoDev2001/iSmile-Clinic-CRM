@@ -57,6 +57,14 @@ export function ClinicProfileForm({ profile, servicesOffered, canEdit }: ClinicP
           <FormTextField form={form} name="address" label="Address" placeholder="Street, city" autoComplete="street-address" className={inputClass} />
         </div>
 
+        <label className="flex items-start gap-3 rounded-2xl bg-[#F4F6F9]/80 px-4 py-3">
+          <input type="checkbox" className="mt-1 size-4 accent-[#1D5296]" {...form.register("vatRegistered")} />
+          <span className="flex flex-col">
+            <span className="text-[15px]">VAT-registered</span>
+            <span className="text-xs text-[#5E6B7E]">Adds 12% VAT to invoices. Senior citizens and PWDs are always VAT-exempt and get 20% off.</span>
+          </span>
+        </label>
+
         <section aria-labelledby="hours-heading" className="flex flex-col gap-2">
           <h3 id="hours-heading" className="text-sm text-[#46566B]">
             Clinic hours · Mia uses these to book appointments

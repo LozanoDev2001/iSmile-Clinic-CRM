@@ -25,6 +25,7 @@ const profile = (overrides: Partial<ClinicProfile> = {}): ClinicProfile => ({
   tagline: "Pediatrics · Family · Orthodontics",
   phone: "+63 2 8123 4567",
   address: "12 Example St, Makati",
+  vatRegistered: true,
   hours: WEEKDAYS.map((day) => ({ day, closed: day === "Sun", open: "09:00", close: "18:00" })),
   ...overrides,
 });

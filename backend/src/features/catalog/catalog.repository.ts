@@ -1,13 +1,13 @@
 import "server-only";
 import { prisma, type TransactionClient } from "@backend/lib/prisma";
-import type { TaxType } from "./catalog.types";
+import type { ServiceKind } from "./catalog.types";
 
-const SERVICE_SELECT = { id: true, code: true, name: true, price: true, taxType: true, hmoCoverable: true } as const;
+const SERVICE_SELECT = { id: true, code: true, name: true, price: true, kind: true, hmoCoverable: true } as const;
 
 interface ServiceData {
   name: string;
   price: number;
-  taxType: TaxType;
+  kind: ServiceKind;
   hmoCoverable: boolean;
 }
 
@@ -16,14 +16,14 @@ export const catalogRepository = {
     return prisma.service.findMany({
       where: { clinicId, active: true },
       select: SERVICE_SELECT,
-      orderBy: [{ taxType: "asc" }, { name: "asc" }],
+      orderBy: [{ kind: "desc" }, { name: "asc" }],
     });
   },
 
   /** Active services with their usual length, for booking appointments. */
   listBookable(clinicId: string) {
     return prisma.service.findMany({
-      where: { clinicId, active: true, taxType: "exempt" },
+      where: { clinicId, active: true, kind: "service" },
       select: { id: true, name: true, durationMinutes: true },
       orderBy: { name: "asc" },
     });
@@ -31,6 +31,10 @@ export const catalogRepository = {
 
   findActive(clinicId: string, id: string, tx: TransactionClient = prisma) {
     return tx.service.findFirst({ where: { id, clinicId, active: true }, select: SERVICE_SELECT });
+  },
+
+  findActiveByIds(clinicId: string, ids: string[], tx: TransactionClient = prisma) {
+    return tx.service.findMany({ where: { clinicId, active: true, id: { in: ids } }, select: SERVICE_SELECT });
   },
 
   /** Case-insensitive under the default MySQL collation. */

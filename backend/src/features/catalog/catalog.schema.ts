@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const TAX_TYPES = ["exempt", "vat"] as const;
+export const SERVICE_KINDS = ["service", "product"] as const;
 
 const MAX_PRICE = 10_000_000;
 
@@ -17,6 +17,6 @@ export const serviceInputSchema = z.object({
     .gt(0, "Enter a price above ₱0.")
     .max(MAX_PRICE, "That price is too high.")
     .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, "Use at most 2 decimal places."),
-  taxType: z.enum(TAX_TYPES),
+  kind: z.enum(SERVICE_KINDS),
   hmoCoverable: z.boolean(),
 });

@@ -18,6 +18,8 @@ export const clinicProfileSchema = z.object({
   tagline: z.string().trim().max(120),
   phone: z.string().trim().max(40),
   address: z.string().trim().max(255),
+  // Missing in profiles saved before the switch existed; VAT-registered is the usual case.
+  vatRegistered: z.boolean().default(true),
   hours: z
     .array(openingHoursSchema)
     .length(WEEKDAYS.length)

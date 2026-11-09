@@ -52,32 +52,32 @@ async function seedPatients(clinicId: string) {
   }
 }
 
-// [code, name, price before VAT, tax type, HMO can cover it]
-const PRICE_LIST: [string, string, number, "exempt" | "vat", boolean][] = [
-  ["CONS", "Consultation and oral examination", 500, "exempt", true],
-  ["PROPH", "Oral prophylaxis (cleaning)", 1300, "exempt", true],
-  ["PCLN", "Pediatric oral prophylaxis", 1500, "exempt", true],
-  ["FLUO", "Fluoride varnish application", 800, "exempt", true],
-  ["SEAL", "Pit and fissure sealant", 700, "exempt", true],
-  ["FIL1", "Composite restoration, 1 surface", 1500, "exempt", true],
-  ["FIL2", "Composite restoration, 2 surfaces", 2200, "exempt", true],
-  ["EXT", "Simple extraction", 1200, "exempt", true],
-  ["SEXT", "Surgical extraction, impacted tooth", 9000, "exempt", false],
-  ["RCT", "Root canal treatment, molar", 14000, "exempt", false],
-  ["CRWN", "Porcelain-fused-to-metal crown", 14500, "exempt", false],
-  ["PA", "Periapical X-ray", 500, "exempt", true],
-  ["PANO", "Panoramic X-ray", 1500, "exempt", false],
-  ["EMER", "Emergency consultation", 1000, "exempt", true],
-  ["OCON", "Orthodontic consultation and records", 800, "exempt", false],
-  ["OADJ", "Orthodontic treatment, monthly adjustment", 3500, "exempt", false],
-  ["ALN", "Clear aligner treatment, monthly", 5000, "exempt", false],
-  ["RET", "Orthodontic retainer, per arch", 6500, "exempt", false],
-  ["WHT", "In-office teeth whitening", 12000, "exempt", false],
-  ["VEN", "Porcelain veneer, per unit", 15000, "exempt", false],
-  ["MED", "Prescribed medicine, pain relief", 450, "vat", false],
-  ["MED2", "Prescribed medicine, antibiotic course", 1000, "vat", false],
-  ["KIT", "Post-surgery aftercare kit", 560, "vat", false],
-  ["BRUSH", "iSmile oral care kit", 280, "vat", false],
+// [code, name, price before VAT, kind, HMO can cover it]
+const PRICE_LIST: [string, string, number, "service" | "product", boolean][] = [
+  ["CONS", "Consultation and oral examination", 500, "service", true],
+  ["PROPH", "Oral prophylaxis (cleaning)", 1300, "service", true],
+  ["PCLN", "Pediatric oral prophylaxis", 1500, "service", true],
+  ["FLUO", "Fluoride varnish application", 800, "service", true],
+  ["SEAL", "Pit and fissure sealant", 700, "service", true],
+  ["FIL1", "Composite restoration, 1 surface", 1500, "service", true],
+  ["FIL2", "Composite restoration, 2 surfaces", 2200, "service", true],
+  ["EXT", "Simple extraction", 1200, "service", true],
+  ["SEXT", "Surgical extraction, impacted tooth", 9000, "service", false],
+  ["RCT", "Root canal treatment, molar", 14000, "service", false],
+  ["CRWN", "Porcelain-fused-to-metal crown", 14500, "service", false],
+  ["PA", "Periapical X-ray", 500, "service", true],
+  ["PANO", "Panoramic X-ray", 1500, "service", false],
+  ["EMER", "Emergency consultation", 1000, "service", true],
+  ["OCON", "Orthodontic consultation and records", 800, "service", false],
+  ["OADJ", "Orthodontic treatment, monthly adjustment", 3500, "service", false],
+  ["ALN", "Clear aligner treatment, monthly", 5000, "service", false],
+  ["RET", "Orthodontic retainer, per arch", 6500, "service", false],
+  ["WHT", "In-office teeth whitening", 12000, "service", false],
+  ["VEN", "Porcelain veneer, per unit", 15000, "service", false],
+  ["MED", "Prescribed medicine, pain relief", 450, "product", false],
+  ["MED2", "Prescribed medicine, antibiotic course", 1000, "product", false],
+  ["KIT", "Post-surgery aftercare kit", 560, "product", false],
+  ["BRUSH", "iSmile oral care kit", 280, "product", false],
 ];
 
 // Usual visit length in minutes, used to book appointments.
@@ -89,7 +89,7 @@ const DURATIONS: Record<string, number> = {
 async function seedPriceList(clinicId: string) {
   if ((await prisma.service.count({ where: { clinicId } })) > 0) return;
   await prisma.service.createMany({
-    data: PRICE_LIST.map(([code, name, price, taxType, hmoCoverable]) => ({ clinicId, code, name, price, taxType, hmoCoverable })),
+    data: PRICE_LIST.map(([code, name, price, kind, hmoCoverable]) => ({ clinicId, code, name, price, kind, hmoCoverable })),
   });
 }
 
