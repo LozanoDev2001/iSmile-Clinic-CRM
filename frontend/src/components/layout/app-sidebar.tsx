@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -16,7 +16,12 @@ interface AppSidebarProps {
   allowedKeys: string[];
   userName: string;
   roleLabel: string;
+  /** Page content joined to the right of the rail (e.g. crwdForce's conversations). */
+  panel?: ReactNode;
 }
+
+/** Pages whose @rail slot fills the panel beside the rail. */
+const PANEL_PAGES = ["/crwdforce"];
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -26,6 +31,7 @@ export function AppSidebar({
   allowedKeys,
   userName,
   roleLabel,
+  panel,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -35,6 +41,7 @@ export function AppSidebar({
     ...modules.filter((m) => !PHONE_PRIMARY.includes(m.key)),
   ].slice(0, PHONE_SLOTS);
   const moreActive = !primary.some((m) => isActive(pathname, m.href));
+  const panelOpen = PANEL_PAGES.includes(pathname);
   const initial = userName
     .replace(/^Dr\.?\s*/i, "")
     .charAt(0)
@@ -42,40 +49,55 @@ export function AppSidebar({
 
   return (
     <>
-      <aside className="rail-bg sticky top-3.5 hidden h-[calc(100dvh-28px)] min-h-[560px] w-[88px] shrink-0 flex-col items-center gap-3.5 overflow-y-auto rounded-[30px] pt-[18px] pb-4 text-white [scrollbar-width:none] md:flex">
-        <Link
-          href="/dashboard"
-          aria-label="iSmile Dental Home"
-          className="fill-orange grid size-12 shrink-0 place-items-center rounded-full"
-        >
-          <SmileMark />
-        </Link>
-        <div className="h-px w-10 shrink-0 bg-[#3A74B6]" />
-        <nav aria-label="Main" className="flex flex-col items-center gap-1.5">
-          {modules.map((m) => (
-            <RailLink
-              key={m.key}
-              module={m}
-              active={isActive(pathname, m.href)}
-            />
-          ))}
-        </nav>
-        {/* Bottom group sits at the end of the rail; on short screens the rail scrolls, as in the design. */}
-        <div className="mt-auto flex shrink-0 flex-col items-center gap-2.5 pt-1.5">
-          <NotificationsButton variant="rail" />
-          <div
-            title={`${userName} · ${roleLabel}`}
-            className="flex flex-col items-center gap-[3px]"
+      <aside className="rail-bg sticky top-3.5 hidden h-[calc(100dvh-28px)] min-h-[560px] shrink-0 overflow-hidden rounded-[30px] text-white md:flex">
+        <div className="flex w-[88px] shrink-0 flex-col items-center gap-3.5 overflow-y-auto pt-[18px] pb-4 [scrollbar-width:none]">
+          <Link
+            href="/dashboard"
+            aria-label="iSmile Dental Home"
+            className="fill-orange grid size-12 shrink-0 place-items-center rounded-full"
           >
-            <span className="flex size-[46px] rounded-full border-2 border-[#F39A1E] p-[3px]">
-              <span className="grid flex-1 place-items-center rounded-full bg-[#DCEAFB] text-base font-medium text-[#0E2A47]">
-                {initial}
+            <SmileMark />
+          </Link>
+          <div className="h-px w-10 shrink-0 bg-[#3A74B6]" />
+          <nav aria-label="Main" className="flex flex-col items-center gap-1.5">
+            {modules.map((m) => (
+              <RailLink
+                key={m.key}
+                module={m}
+                active={isActive(pathname, m.href)}
+              />
+            ))}
+          </nav>
+          {/* Bottom group sits at the end of the rail; on short screens the rail scrolls, as in the design. */}
+          <div className="mt-auto flex shrink-0 flex-col items-center gap-2.5 pt-1.5">
+            <NotificationsButton variant="rail" />
+            <div
+              title={`${userName} · ${roleLabel}`}
+              className="flex flex-col items-center gap-[3px]"
+            >
+              <span className="flex size-[46px] rounded-full border-2 border-[#F39A1E] p-[3px]">
+                <span className="grid flex-1 place-items-center rounded-full bg-[#DCEAFB] text-base font-medium text-[#0E2A47]">
+                  {initial}
+                </span>
               </span>
-            </span>
-            <span className="max-w-[80px] truncate text-[11px] text-[#EAF1FA]">
-              {userName.split(" ").at(-1)}
-            </span>
+              <span className="max-w-[80px] truncate text-[11px] text-[#EAF1FA]">
+                {userName.split(" ").at(-1)}
+              </span>
+            </div>
           </div>
+        </div>
+        {/* Width animates so the panel slides out of the rail and back in. */}
+        <div
+          aria-hidden={!panelOpen}
+          inert={!panelOpen}
+          className={cn(
+            "h-full overflow-hidden border-l transition-[width,opacity,border-color] duration-300 ease-out motion-reduce:transition-none",
+            panelOpen
+              ? "w-[340px] border-[#3369AA] opacity-100"
+              : "w-0 border-transparent opacity-0",
+          )}
+        >
+          <div className="h-full w-[340px]">{panelOpen ? panel : null}</div>
         </div>
       </aside>
 

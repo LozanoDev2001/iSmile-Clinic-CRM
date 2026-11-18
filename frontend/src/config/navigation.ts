@@ -34,7 +34,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "crwdForce",
     icon: Headphones,
     permission: "crwdforce.read",
-    comingSoon: "Mia, the AI receptionist, will answer chats and calls and book appointments here.",
   },
   {
     key: "leads",
@@ -42,7 +41,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Leads",
     icon: Filter,
     permission: "leads.read",
-    comingSoon: "Track every inquiry from first message to booked appointment on a pipeline board.",
   },
   {
     key: "contacts",
@@ -50,7 +48,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Contacts",
     icon: SquareUser,
     permission: "contacts.read",
-    comingSoon: "Everyone who has contacted the clinic, with their channels and history.",
   },
   {
     key: "patients",
@@ -58,7 +55,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Patients",
     icon: Users,
     permission: "patients.read",
-    comingSoon: "Search patient records, contact details and treatment history.",
   },
   {
     key: "messaging",
@@ -67,7 +63,6 @@ export const NAV_MODULES: NavModule[] = [
     shortLabel: "Messages",
     icon: MessageSquare,
     permission: "messaging.read",
-    comingSoon: "One inbox for Facebook, Instagram, WhatsApp, Viber and more.",
   },
   {
     key: "calendar",
@@ -75,7 +70,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Calendar",
     icon: CalendarDays,
     permission: "appointments.read",
-    comingSoon: "Book, move and confirm appointments across dentists and branches.",
   },
   {
     key: "billing",
@@ -83,7 +77,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Billing",
     icon: CreditCard,
     permission: "billing.read",
-    comingSoon: "Invoices, payments, HMO claims and the clinic's cash position.",
   },
   {
     key: "reports",
@@ -91,7 +84,6 @@ export const NAV_MODULES: NavModule[] = [
     label: "Reports",
     icon: ChartLine,
     permission: "reports.read",
-    comingSoon: "Monthly summaries, sales, dentist production and collections reports.",
   },
   { key: "settings", href: "/settings", label: "Settings", icon: Settings },
 ];

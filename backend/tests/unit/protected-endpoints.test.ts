@@ -35,7 +35,7 @@ vi.mock("@backend/lib/logging/audit", async (importOriginal) => ({
   audit: mocks.audit,
 }));
 
-const { listPatientsHandler, getPatientHandler } = await import("@backend/features/patients/patients.controller");
+const { listPatientsHandler, getPatientHandler } = await import("@backend/features/patients/patients.api.controller");
 const authActions = await import("@backend/features/auth/auth.controller");
 const usersActions = await import("@backend/features/users/users.controller");
 const { teamMemberSelect } = await import("@backend/features/users/users.repository");
@@ -76,7 +76,8 @@ describe("protected API routes", () => {
     expect(res.status).toBe(200);
     expect(mocks.list).toHaveBeenCalledWith(
       { clinicId: CLINIC_A, assigneeId: undefined },
-      { page: 2, pageSize: 10, search: "smi" },
+      { page: 2, pageSize: 10, search: "smi", filter: "all" },
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     );
   });
 

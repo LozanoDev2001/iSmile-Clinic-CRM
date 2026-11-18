@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { runAction, type ActionResult } from "@backend/lib/api/response";
 import { requireAuth } from "@backend/lib/authorization";
-import { updateSignInRules } from "./settings.service";
-import type { SignInRules } from "./settings.types";
+import { updateClinicProfile, updateSignInRules } from "./settings.service";
+import type { ClinicProfile, SignInRules } from "./settings.types";
 
 export async function updateSignInRulesAction(input: SignInRules): Promise<ActionResult<SignInRules>> {
   return runAction(async () => {
@@ -12,4 +12,12 @@ export async function updateSignInRulesAction(input: SignInRules): Promise<Actio
     revalidatePath("/settings", "layout");
     return rules;
   }, "Sign-in rules saved.");
+}
+
+export async function updateClinicProfileAction(input: ClinicProfile): Promise<ActionResult<ClinicProfile>> {
+  return runAction(async () => {
+    const profile = await updateClinicProfile(await requireAuth(), input);
+    revalidatePath("/", "layout");
+    return profile;
+  }, "Clinic profile saved.");
 }

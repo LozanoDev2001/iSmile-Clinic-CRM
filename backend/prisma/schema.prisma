@@ -19,6 +19,8 @@ model Clinic {
   currency            String               @default("PHP") @db.Char(3)
   settings            Json
   createdAt           DateTime             @default(now()) @map("created_at")
+  broadcasts          Broadcast[]
+  miaDrafts           MiaDraft[]
   appointmentChairs   AppointmentChair[]
   appointments        Appointment[]
   approvalRequests    ApprovalRequest[]
@@ -87,6 +89,10 @@ model User {
   userRoles                        UserRole[]
   clinic                           Clinic                   @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "users_ibfk_1")
 
+  broadcasts Broadcast[]
+
+  miaDrafts MiaDraft[]
+
   @@unique([clinicId, email], map: "clinic_id")
   @@unique([clinicId, staffCode], map: "clinic_id_2")
   @@index([email])
@@ -94,32 +100,41 @@ model User {
 }
 
 model Patient {
-  id               String            @id @default(uuid()) @db.Char(36)
-  clinicId         String            @map("clinic_id") @db.Char(36)
-  contactId        String            @unique(map: "contact_id") @map("contact_id") @db.Char(36)
-  patientNo        String            @map("patient_no") @db.VarChar(255)
-  dob              DateTime?         @db.Date
-  sex              String?           @db.VarChar(255)
-  medicalAlerts    String?           @map("medical_alerts") @db.Text
-  primaryDentistId String?           @map("primary_dentist_id") @db.Char(36)
-  status           String            @default("active") @db.VarChar(255)
-  createdAt        DateTime          @default(now()) @map("created_at")
-  appointments     Appointment[]
-  automationJobs   AutomationJob[]
-  clinicalFiles    ClinicalFile[]
-  encounters       Encounter[]
-  invoices         Invoice[]
-  leads            Lead[]
-  patientGuardians PatientGuardian[]
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "patients_ibfk_1")
-  contact          Contact           @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "patients_ibfk_2")
-  primaryDentist   User?             @relation(fields: [primaryDentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_ibfk_3")
-  paymentPlans     PaymentPlan[]
-  payments         Payment[]
-  treatmentPlans   TreatmentPlan[]
+  id                String            @id @default(uuid()) @db.Char(36)
+  clinicId          String            @map("clinic_id") @db.Char(36)
+  contactId         String            @unique(map: "contact_id") @map("contact_id") @db.Char(36)
+  patientNo         String            @map("patient_no") @db.VarChar(255)
+  dob               DateTime?         @db.Date
+  sex               String?           @db.VarChar(255)
+  medicalAlerts     String?           @map("medical_alerts") @db.Text
+  medicalConditions String?           @map("medical_conditions") @db.Text
+  medications       String?           @db.Text
+  civilStatus       String?           @map("civil_status") @db.VarChar(40)
+  occupation        String?           @db.VarChar(120)
+  payerId           String?           @map("payer_id") @db.Char(36)
+  hmoMemberNo       String?           @map("hmo_member_no") @db.VarChar(60)
+  scPwdId           String?           @map("sc_pwd_id") @db.VarChar(60)
+  primaryDentistId  String?           @map("primary_dentist_id") @db.Char(36)
+  status            String            @default("active") @db.VarChar(255)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  appointments      Appointment[]
+  automationJobs    AutomationJob[]
+  clinicalFiles     ClinicalFile[]
+  encounters        Encounter[]
+  invoices          Invoice[]
+  leads             Lead[]
+  patientGuardians  PatientGuardian[]
+  clinic            Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "patients_ibfk_1")
+  contact           Contact           @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "patients_ibfk_2")
+  primaryDentist    User?             @relation(fields: [primaryDentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_ibfk_3")
+  payer             Payer?            @relation(fields: [payerId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "patients_payer_fkey")
+  paymentPlans      PaymentPlan[]
+  payments          Payment[]
+  treatmentPlans    TreatmentPlan[]
 
   @@unique([clinicId, patientNo], map: "clinic_id")
   @@index([primaryDentistId], map: "primary_dentist_id")
+  @@index([payerId], map: "payer_id")
   @@map("patients")
 }
 
@@ -177,6 +192,8 @@ model Appointment {
   notes         String?           @db.Text
   createdById   String?           @map("created_by") @db.Char(36)
   createdAt     DateTime          @default(now()) @map("created_at")
+  leads         Lead[]
+  invoices      Invoice[]
   clinic        Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_1")
   patient       Patient           @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "appointments_ibfk_2")
   dentist       User?             @relation("appointments_dentist_idTousers", fields: [dentistId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "appointments_ibfk_3")
@@ -281,6 +298,7 @@ model Claim {
   status         String    @default("draft") @db.VarChar(255)
   submittedAt    DateTime? @map("submitted_at")
   approvedAmount Decimal?  @map("approved_amount") @db.Decimal(12, 2)
+  loaNo          String?   @map("loa_no") @db.VarChar(60)
   clinic         Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "claims_ibfk_1")
   invoice        Invoice   @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "claims_ibfk_2")
   payer          Payer     @relation(fields: [payerId], references: [id], onUpdate: Restrict, map: "claims_ibfk_3")
@@ -321,6 +339,9 @@ model Contact {
   email            String?           @db.VarChar(255)
   phone            String?           @db.VarChar(255)
   preferredChannel String?           @map("preferred_channel") @db.VarChar(255)
+  address          String?           @db.VarChar(255)
+  marketingOptIn   Boolean           @default(false) @map("marketing_opt_in")
+  marketingOptInAt DateTime?         @map("marketing_opt_in_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at")
   clinic           Clinic            @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "contacts_ibfk_1")
@@ -334,21 +355,26 @@ model Contact {
 }
 
 model Conversation {
-  id           String    @id @default(uuid()) @db.Char(36)
-  clinicId     String    @map("clinic_id") @db.Char(36)
-  contactId    String    @map("contact_id") @db.Char(36)
-  channel      String    @db.VarChar(255)
-  assignedToId String?   @map("assigned_to") @db.Char(36)
-  status       String    @default("open") @db.VarChar(255)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  clinic       Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
-  contact      Contact   @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
-  assignedTo   User?     @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
-  messages     Message[]
+  id            String     @id @default(uuid()) @db.Char(36)
+  clinicId      String     @map("clinic_id") @db.Char(36)
+  contactId     String     @map("contact_id") @db.Char(36)
+  channel       String     @db.VarChar(255)
+  assignedToId  String?    @map("assigned_to") @db.Char(36)
+  status        String     @default("open") @db.VarChar(255)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  externalRef   String?    @map("external_ref") @db.VarChar(191)
+  lastMessageAt DateTime?  @map("last_message_at")
+  clinic        Clinic     @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_1")
+  contact       Contact    @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "conversations_ibfk_2")
+  assignedTo    User?      @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "conversations_ibfk_3")
+  miaDrafts     MiaDraft[]
+  messages      Message[]
 
+  @@unique([clinicId, channel, externalRef], map: "conversations_external_ref")
   @@index([assignedToId], map: "assigned_to")
   @@index([clinicId], map: "clinic_id")
   @@index([contactId], map: "contact_id")
+  @@index([clinicId, lastMessageAt], map: "conversations_inbox_idx")
   @@map("conversations")
 }
 
@@ -410,6 +436,8 @@ model InvoiceItem {
   unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
   taxType     String   @map("tax_type") @db.VarChar(255)
   lineTotal   Decimal  @map("line_total") @db.Decimal(12, 2)
+  discount    Decimal  @default(0.00) @db.Decimal(12, 2)
+  position    Int      @default(0)
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "invoice_items_ibfk_1")
   service     Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoice_items_ibfk_2")
 
@@ -451,12 +479,22 @@ model Invoice {
   subtotal            Decimal              @default(0.00) @db.Decimal(12, 2)
   taxTotal            Decimal              @default(0.00) @map("tax_total") @db.Decimal(12, 2)
   grandTotal          Decimal              @default(0.00) @map("grand_total") @db.Decimal(12, 2)
+  appointmentId       String?              @map("appointment_id") @db.Char(36)
+  discountType        String               @default("none") @map("discount_type") @db.VarChar(10)
+  discountIdNo        String?              @map("discount_id_no") @db.VarChar(60)
+  discountTotal       Decimal              @default(0.00) @map("discount_total") @db.Decimal(12, 2)
+  vatableSales        Decimal              @default(0.00) @map("vatable_sales") @db.Decimal(12, 2)
+  vatExemptSales      Decimal              @default(0.00) @map("vat_exempt_sales") @db.Decimal(12, 2)
+  hmoDue              Decimal              @default(0.00) @map("hmo_due") @db.Decimal(12, 2)
+  voidReason          String?              @map("void_reason") @db.Text
+  voidedAt            DateTime?            @map("voided_at")
   createdById         String?              @map("created_by") @db.Char(36)
   claims              Claim[]
   invoiceItems        InvoiceItem[]
   invoiceVoidRequests InvoiceVoidRequest[]
   clinic              Clinic               @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "invoices_ibfk_1")
   patient             Patient              @relation(fields: [patientId], references: [id], onUpdate: Restrict, map: "invoices_ibfk_2")
+  appointment         Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoices_appointment_fkey")
   payer               Payer?               @relation(fields: [payerId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoices_ibfk_3")
   createdBy           User?                @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "invoices_ibfk_4")
   paymentAllocations  PaymentAllocation[]
@@ -467,6 +505,7 @@ model Invoice {
   @@index([clinicId, patientId, issuedAt], map: "invoice_patient_idx")
   @@index([patientId], map: "patient_id")
   @@index([payerId], map: "payer_id")
+  @@index([appointmentId], map: "appointment_id")
   @@map("invoices")
 }
 
@@ -507,6 +546,15 @@ model Lead {
   convertedPatientId  String?        @map("converted_patient_id") @db.Char(36)
   createdAt           DateTime       @default(now()) @map("created_at")
   convertedAt         DateTime?      @map("converted_at")
+  status              String         @default("open") @db.VarChar(20)
+  hot                 Boolean        @default(false)
+  message             String?        @db.Text
+  nextActionAt        DateTime?      @map("next_action_at")
+  attempts            Int            @default(0)
+  closedAt            DateTime?      @map("closed_at")
+  closedReason        String?        @map("closed_reason") @db.VarChar(120)
+  wonValue            Decimal?       @map("won_value") @db.Decimal(12, 2)
+  appointmentId       String?        @map("appointment_id") @db.Char(36)
   leadActivities      LeadActivity[]
   clinic              Clinic         @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "leads_ibfk_1")
   contact             Contact        @relation(fields: [contactId], references: [id], onUpdate: Restrict, map: "leads_ibfk_2")
@@ -514,6 +562,7 @@ model Lead {
   assignedTo          User?          @relation(fields: [assignedToId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_4")
   convertedPatient    Patient?       @relation(fields: [convertedPatientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_ibfk_5")
   interestedService   Service?       @relation(fields: [interestedServiceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_interested_service_fkey")
+  appointment         Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "leads_appointment_fkey")
 
   @@index([assignedToId], map: "assigned_to")
   @@index([clinicId], map: "clinic_id")
@@ -521,6 +570,8 @@ model Lead {
   @@index([convertedPatientId], map: "converted_patient_id")
   @@index([interestedServiceId], map: "leads_interested_service_fkey")
   @@index([sourceId], map: "source_id")
+  @@index([clinicId, status, stage], map: "leads_board_idx")
+  @@index([appointmentId], map: "leads_appointment_id")
   @@map("leads")
 }
 
@@ -533,11 +584,15 @@ model Message {
   providerMessageId String?      @map("provider_message_id") @db.VarChar(255)
   sentAt            DateTime     @default(now()) @map("sent_at")
   deliveryStatus    String?      @map("delivery_status") @db.VarChar(255)
+  kind              String       @default("chat") @db.VarChar(20)
+  broadcastId       String?      @map("broadcast_id") @db.Char(36)
+  broadcast         Broadcast?   @relation(fields: [broadcastId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "messages_broadcast_fkey")
   conversation      Conversation @relation(fields: [conversationId], references: [id], onUpdate: Restrict, map: "messages_ibfk_1")
   senderUser        User?        @relation(fields: [senderUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "messages_ibfk_2")
 
   @@index([conversationId], map: "conversation_id")
   @@index([senderUserId], map: "sender_user_id")
+  @@index([broadcastId], map: "messages_broadcast_id")
   @@map("messages")
 }
 
@@ -575,6 +630,7 @@ model Payer {
   payerType String    @map("payer_type") @db.VarChar(255)
   claims    Claim[]
   invoices  Invoice[]
+  patients  Patient[]
   clinic    Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payers_ibfk_1")
 
   @@index([clinicId], map: "clinic_id")
@@ -723,7 +779,8 @@ model Service {
   name            String          @db.VarChar(255)
   price           Decimal         @db.Decimal(12, 2)
   durationMinutes Int?            @map("duration_minutes")
-  taxType         String          @default("exempt") @map("tax_type") @db.VarChar(255)
+  kind            String          @default("service") @db.VarChar(20)
+  hmoCoverable    Boolean         @default(false) @map("hmo_coverable")
   active          Boolean         @default(true)
   appointments    Appointment[]
   invoiceItems    InvoiceItem[]
@@ -793,4 +850,52 @@ model UserRole {
   @@id([userId, roleId])
   @@index([roleId], map: "role_id")
   @@map("user_roles")
+}
+
+/// A message sent to many patients at once; each recipient gets a message in their conversation.
+model Broadcast {
+  id             String    @id @default(uuid()) @db.Char(36)
+  clinicId       String    @map("clinic_id") @db.Char(36)
+  title          String    @db.VarChar(120)
+  body           String    @db.Text
+  audience       String    @db.VarChar(40)
+  recipientCount Int       @default(0) @map("recipient_count")
+  createdById    String?   @map("created_by") @db.Char(36)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "broadcasts_clinic_fkey")
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "broadcasts_created_by_fkey")
+  messages       Message[]
+
+  @@index([clinicId, createdAt], map: "broadcasts_clinic_created")
+  @@index([createdById], map: "broadcasts_created_by")
+  @@map("broadcasts")
+}
+
+/// A reply Mia (crwdForce) suggested for a conversation; staff use or dismiss it.
+model MiaDraft {
+  id             String       @id @default(uuid()) @db.Char(36)
+  clinicId       String       @map("clinic_id") @db.Char(36)
+  conversationId String       @map("conversation_id") @db.Char(36)
+  reply          String       @db.Text
+  summary        String       @db.Text
+  intent         String       @db.VarChar(40)
+  nextStep       String       @map("next_step") @db.VarChar(40)
+  slotLabel      String?      @map("slot_label") @db.VarChar(120)
+  handover       Boolean      @default(false)
+  handoverReason String?      @map("handover_reason") @db.VarChar(255)
+  status         String       @default("pending") @db.VarChar(20)
+  model          String       @db.VarChar(60)
+  inputTokens    Int          @default(0) @map("input_tokens")
+  outputTokens   Int          @default(0) @map("output_tokens")
+  createdById    String?      @map("created_by") @db.Char(36)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  decidedAt      DateTime?    @map("decided_at")
+  clinic         Clinic       @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "mia_drafts_clinic_fkey")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onUpdate: Restrict, map: "mia_drafts_conversation_fkey")
+  createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "mia_drafts_created_by_fkey")
+
+  @@index([clinicId, createdAt], map: "mia_drafts_clinic_created")
+  @@index([conversationId], map: "mia_drafts_conversation")
+  @@index([createdById], map: "mia_drafts_created_by")
+  @@map("mia_drafts")
 }

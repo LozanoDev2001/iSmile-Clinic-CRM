@@ -1,5 +1,5 @@
 import "server-only";
-import { DEMO_ACCOUNT } from "./demo-credentials";
+import { DEMO_ACCOUNT, DEMO_STAFF } from "./demo-credentials";
 
 export interface DemoAccount {
   label: string;
@@ -12,5 +12,6 @@ export interface DemoAccount {
  */
 export function getDemoAccounts(): { password: string; accounts: DemoAccount[] } | null {
   if (process.env.NODE_ENV !== "development") return null;
-  return { password: DEMO_ACCOUNT.password, accounts: [{ label: DEMO_ACCOUNT.label, email: DEMO_ACCOUNT.email }] };
+  const accounts = [DEMO_ACCOUNT, ...DEMO_STAFF].map(({ label, email }) => ({ label, email }));
+  return { password: DEMO_ACCOUNT.password, accounts };
 }
