@@ -61,8 +61,12 @@ export const MODULES = [
     tabs: [
       { key: "overview", label: "Overview" },
       { key: "sales_invoices", label: "Sales invoices" },
+      { key: "claims", label: "HMO & PhilHealth" },
       { key: "payment_plans", label: "Payment plans" },
       { key: "collections", label: "Collections & bank" },
+      { key: "tax", label: "BIR & tax" },
+      { key: "reports", label: "Reports" },
+      { key: "audit", label: "Audit trail" },
     ],
   },
   { key: "reports", label: "Reports", description: "Clinic performance reports", group: "Money" },

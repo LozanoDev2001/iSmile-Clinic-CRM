@@ -1,6 +1,7 @@
 import { clinicToday } from "@/config/clinic";
+import { ALL_MONTHS } from "@backend/features/leads/lead.schema";
 
-export const LEAD_TABS = ["pipeline", "won", "lost"] as const;
+export const LEAD_TABS = ["pipeline", "won", "lost", "report"] as const;
 export type LeadTab = (typeof LEAD_TABS)[number];
 
 /** Everything the Leads screen shows is driven by the URL. */
@@ -33,7 +34,7 @@ export function parseLeadsState(p: LeadsSearchParams): LeadsState {
     source: UUID.test(source) ? source : "all",
     who: UUID.test(who) || ["none", "due", "me"].includes(who) ? who : "all",
     q: p.q?.trim().slice(0, 100) || undefined,
-    month: /^\d{4}-\d{2}$/.test(month) ? month : clinicToday().slice(0, 7),
+    month: /^\d{4}-\d{2}$/.test(month) || month === ALL_MONTHS ? month : clinicToday().slice(0, 7),
     lead: UUID.test(lead) ? lead : undefined,
     add: p.add === "1",
   };
@@ -57,4 +58,13 @@ export function leadsHref(state: LeadsState, patch: Partial<LeadsState> = {}): s
 export function shiftMonth(month: string, step: -1 | 1): string {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + step, 1)).toISOString().slice(0, 7);
+}
+
+const RECENT_MONTHS = 4;
+
+/** The current month and the few before it, oldest first. */
+export function recentMonths(current: string): string[] {
+  const months = [current];
+  while (months.length < RECENT_MONTHS) months.unshift(shiftMonth(months[0], -1));
+  return months;
 }

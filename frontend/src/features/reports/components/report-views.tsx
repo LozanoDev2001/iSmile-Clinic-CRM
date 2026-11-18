@@ -193,78 +193,121 @@ export function SalesView({ report: r }: { report: SalesReport }) {
   );
 }
 
+type Cell = string | number;
+
+const winRate = (won: number, lost: number) => (won + lost ? percent(Math.round((won / (won + lost)) * 100)) : "—");
+const share = (part: number, whole: number) => (whole ? percent(Math.round((part / whole) * 100)) : "—");
+
+/** "+17% vs Sep"; a month with nothing to compare against says so. */
+function versus(current: number, previous: number, month: string) {
+  if (!previous) return current ? `New vs ${monthShort(month)}` : `None in ${monthShort(month)} either`;
+  const change = Math.round(((current - previous) / previous) * 100);
+  return `${change >= 0 ? "+" : ""}${change}% vs ${monthShort(month)}`;
+}
+
+/** A report table: first column is a label, the rest are right-aligned numbers, with an optional total row. */
+function ReportTable({ head, rows, total, empty }: { head: string[]; rows: Cell[][]; total?: Cell[]; empty: string }) {
+  if (!rows.length) return <p className="py-4 text-sm text-[#5E6B7E]">{empty}</p>;
+  const cell = (i: number) => cn("py-2 tabular-nums", i === 0 ? "pr-3 text-left" : "pl-3 text-right whitespace-nowrap");
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b-[1.5px] border-[#0E2A47] text-[11px] tracking-[0.06em] text-[#5E6B7E] uppercase">
+            {head.map((h, i) => (
+              <th key={h} className={cn(cell(i), "font-normal")}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={String(row[0])} className="border-b border-[#EDF0F4] last:border-0">
+              {row.map((c, i) => (
+                <td key={i} className={cell(i)}>
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {total ? (
+          <tfoot>
+            <tr className="border-t-[1.5px] border-[#0E2A47] font-semibold">
+              {total.map((c, i) => (
+                <td key={i} className={cell(i)}>
+                  {c}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </div>
+  );
+}
+
 export function LeadsView({ report: r }: { report: LeadsReport }) {
-  const kpis: [string, string][] = [
-    ["Leads received", count(r.received)],
-    ["Won", count(r.won)],
-    ["Lost", count(r.lost)],
-    ["Win rate", r.winRate === null ? "—" : percent(r.winRate)],
-    ["Won value", peso(r.wonValue)],
+  const p = r.previous;
+  const kpis: { label: string; value: string; sub: string; tone?: string }[] = [
+    { label: "Leads received", value: count(r.received), sub: versus(r.received, p.received, p.month) },
+    { label: "Won", value: count(r.won), sub: versus(r.won, p.won, p.month), tone: "text-[#1F7A4D]" },
+    { label: "Terminated", value: count(r.lost), sub: versus(r.lost, p.lost, p.month), tone: "text-[#A1301F]" },
+    { label: "Win rate", value: winRate(r.won, r.lost), sub: "Won ÷ (won + terminated)" },
+    { label: "Won value", value: peso(r.wonValue), sub: versus(r.wonValue, p.wonValue, p.month) },
+    {
+      label: "Still open",
+      value: count(r.stillOpen),
+      sub: `Of this month’s leads${r.avgDaysToWin === null ? "" : ` · avg ${r.avgDaysToWin.toLocaleString("en-PH", { maximumFractionDigits: 1 })} days to win`}`,
+    },
   ];
+  const received = r.funnel[0]?.value ?? 0;
+  const staffTotal = r.byStaff.reduce((t, s) => ({ assigned: t.assigned + s.assigned, calls: t.calls + s.calls }), { assigned: 0, calls: 0 });
   return (
     <div className="print-area flex flex-col gap-4">
       <h2 className="hidden text-xl print:block">Leads report · {monthLong(r.month)}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {kpis.map(([label, value]) => (
-          <div key={label} className="glass-card flex min-w-0 flex-col gap-1 rounded-[22px] px-4 py-3.5">
-            <span className="text-xs text-[#5E6B7E]">{label}</span>
-            <span className="text-2xl tabular-nums">{value}</span>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        {kpis.map((k) => (
+          <div key={k.label} className="glass-card flex min-w-0 flex-col gap-1 rounded-[22px] p-4">
+            <span className="text-xs text-[#5E6B7E]">{k.label}</span>
+            <span className={cn("text-[26px] leading-tight tabular-nums", k.tone)}>{k.value}</span>
+            <span className="truncate text-xs text-[#5E6B7E]">{k.sub}</span>
           </div>
         ))}
       </div>
-      <Card title="By platform" note="Received counts leads that came in this month; won and lost count leads closed this month">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#E3E7ED] text-left text-xs text-[#5E6B7E]">
-              <th className="py-1.5 font-normal">Platform</th>
-              {["Received", "Won", "Lost", "Win rate", "Won value"].map((h) => (
-                <th key={h} className="py-1.5 text-right font-normal">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {r.bySource.map((s) => (
-              <tr key={s.source} className="border-b border-[#EDF0F4]">
-                <td className="py-1.5">{s.source}</td>
-                <td className="py-1.5 text-right tabular-nums">{s.received}</td>
-                <td className="py-1.5 text-right tabular-nums">{s.won}</td>
-                <td className="py-1.5 text-right tabular-nums">{s.lost}</td>
-                <td className="py-1.5 text-right tabular-nums">{s.won + s.lost ? percent((s.won / (s.won + s.lost)) * 100) : "—"}</td>
-                <td className="py-1.5 text-right tabular-nums">{peso(s.value)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {r.bySource.length === 0 ? <p className="text-sm text-[#5E6B7E]">No leads this month.</p> : null}
-      </Card>
-      <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
-        <Card title="By staff">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#E3E7ED] text-left text-xs text-[#5E6B7E]">
-                <th className="py-1.5 font-normal">Handled by</th>
-                <th className="py-1.5 text-right font-normal">Won</th>
-                <th className="py-1.5 text-right font-normal">Lost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.byStaff.map((s) => (
-                <tr key={s.name} className="border-b border-[#EDF0F4]">
-                  <td className="py-1.5">{s.name}</td>
-                  <td className="py-1.5 text-right tabular-nums">{s.won}</td>
-                  <td className="py-1.5 text-right tabular-nums">{s.lost}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {r.byStaff.length === 0 ? <p className="text-sm text-[#5E6B7E]">No leads closed this month.</p> : null}
+      <div className="grid items-start gap-4 xl:grid-cols-2 2xl:grid-cols-[1.4fr_1.4fr_1fr_1fr]">
+        <Card title="By platform" note="Where leads came from and how they closed">
+          <ReportTable
+            head={["Platform", "Received", "Won", "Terminated", "Win rate", "Won value"]}
+            rows={r.bySource.map((s) => [s.source, s.received, s.won, s.lost, winRate(s.won, s.lost), peso(s.value)])}
+            total={["Total", r.received, r.won, r.lost, winRate(r.won, r.lost), peso(r.wonValue)]}
+            empty="No leads this month."
+          />
         </Card>
-        <Card title="Why leads were lost">
-          <BarList title="Why leads were lost" bars={r.lostReasons} format={count} />
+        <Card title="By team member" note="Who was assigned and how their calls ended">
+          <ReportTable
+            head={["Called by", "Assigned", "Calls", "Won", "Terminated", "Win rate", "Won value"]}
+            rows={r.byStaff.map((s) => [s.name, s.assigned, s.calls, s.won, s.lost, winRate(s.won, s.lost), peso(s.value)])}
+            total={["Total", staffTotal.assigned, staffTotal.calls, r.won, r.lost, winRate(r.won, r.lost), peso(r.wonValue)]}
+            empty="No calls or closed leads this month."
+          />
+        </Card>
+        <Card title="Termination reasons" note={`${count(r.lost)} leads terminated`}>
+          <ReportTable
+            head={["Reason", "Leads", "Share"]}
+            rows={r.lostReasons.map((b) => [b.label, b.value, share(b.value, r.lost)])}
+            total={["Total", r.lost, "100%"]}
+            empty="No leads terminated this month."
+          />
+        </Card>
+        <Card title="Funnel for leads received this month" note="How far this month’s leads have got so far">
+          <ReportTable head={["Step", "Leads", "Of received"]} rows={r.funnel.map((b) => [b.label, b.value, share(b.value, received)])} empty="No leads received this month." />
         </Card>
       </div>
+      <p className="text-xs text-[#5E6B7E]">
+        Leads received counts enquiries that came in during the month. Won and terminated count leads closed during the month, whenever they first came in. Win rate is won ÷ (won + terminated). Won value is the accepted treatment value; amounts billed appear in Billing as treatment is invoiced.
+      </p>
     </div>
   );
 }

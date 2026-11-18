@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { HeartPulse, Phone, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
@@ -79,13 +80,20 @@ function TextAreaField<T extends FieldValues>({ form, name, label, placeholder }
   );
 }
 
-function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function Section({ title, description, icon: Icon, children }: { title: string; description?: string; icon: LucideIcon; children: ReactNode }) {
   return (
-    <fieldset className="flex flex-col gap-4">
-      <legend className="mb-3 flex flex-col gap-0.5">
-        <span className="text-lg">{title}</span>
-        {description ? <span className="text-xs text-[#5E6B7E]">{description}</span> : null}
-      </legend>
+    <fieldset className="glass-card flex min-w-0 flex-col gap-4 rounded-[24px] p-5 sm:p-6">
+      <legend className="sr-only">{title}</legend>
+      <div aria-hidden className="flex items-center gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#E4EEFB] text-[#1D5296]">
+          <Icon className="size-[18px]" aria-hidden />
+        </span>
+        <span className="flex flex-col gap-0.5">
+          <span className="text-lg">{title}</span>
+          {description ? <span className="text-xs text-[#5E6B7E]">{description}</span> : null}
+        </span>
+      </div>
+      {description ? <p className="sr-only">{description}</p> : null}
       <div className={cn("grid gap-4 md:grid-cols-2", fieldLabelsClass)}>{children}</div>
     </fieldset>
   );
@@ -110,10 +118,10 @@ export function PatientForm({ patient, options, lockDentist, canEditClinical }: 
   const cancelHref = patient ? `/patients/${patient.id}` : "/patients";
 
   return (
-    <form onSubmit={onSubmit} noValidate aria-label={patient ? `Edit ${patient.fullName}` : "New patient"} className="glass-card flex flex-col gap-8 rounded-[24px] p-5 sm:p-6">
+    <form onSubmit={onSubmit} noValidate aria-label={patient ? `Edit ${patient.fullName}` : "New patient"} className="flex flex-col gap-4">
       <FormRootError form={form} />
 
-      <Section title="Basic information">
+      <Section title="Basic information" icon={UserRound}>
         <FormTextField form={form} name="fullName" label="Full name" placeholder="First, middle and last name" autoComplete="off" className={inputClass} />
         <FormTextField form={form} name="dob" label="Date of birth" type="date" className={inputClass} />
         <SelectField form={form} name="sex" label="Sex">
@@ -145,7 +153,7 @@ export function PatientForm({ patient, options, lockDentist, canEditClinical }: 
         )}
       </Section>
 
-      <Section title="Contact details">
+      <Section title="Contact details" icon={Phone}>
         <FormTextField form={form} name="phone" label="Mobile" type="tel" placeholder="+63" autoComplete="off" className={inputClass} />
         <FormTextField form={form} name="email" label="Email" type="email" placeholder="name@email.com" autoComplete="off" className={inputClass} />
         <SelectField form={form} name="preferredChannel" label="Preferred app for messages">
@@ -166,7 +174,7 @@ export function PatientForm({ patient, options, lockDentist, canEditClinical }: 
         </label>
       </Section>
 
-      <Section title="Coverage and emergency contact" description="For kids, add the parent or guardian as the emergency contact.">
+      <Section title="Coverage and emergency contact" icon={ShieldCheck} description="For kids, add the parent or guardian as the emergency contact.">
         <SelectField form={form} name="payerId" label="Coverage">
           <option value="">Self-pay</option>
           {options.hmos.map((h) => (
@@ -184,20 +192,20 @@ export function PatientForm({ patient, options, lockDentist, canEditClinical }: 
       </Section>
 
       {canEditClinical ? (
-        <Section title="Clinical" description="Only staff with access to medical records can see these.">
+        <Section title="Clinical" icon={HeartPulse} description="Only staff with access to medical records can see these.">
           <TextAreaField form={form} name="allergies" label="Allergies" placeholder="e.g. Penicillin, latex" />
           <TextAreaField form={form} name="medicalConditions" label="Medical conditions" placeholder="e.g. Hypertension, diabetes" />
           <TextAreaField form={form} name="medications" label="Maintenance medicines" />
         </Section>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <SubmitButton pending={isPending} pendingLabel="Saving…" className={primaryButtonClass}>
-          {patient ? "Save changes" : "Add patient"}
-        </SubmitButton>
+      <div className="glass-card sticky bottom-4 z-10 flex flex-wrap items-center justify-end gap-3 rounded-[24px] p-3 sm:p-4">
         <Link href={cancelHref} className="inline-flex h-12 items-center rounded-full border border-[#D5DCE5] bg-white px-6 text-[15px]">
           Cancel
         </Link>
+        <SubmitButton pending={isPending} pendingLabel="Saving…" className={primaryButtonClass}>
+          {patient ? "Save changes" : "Add patient"}
+        </SubmitButton>
       </div>
     </form>
   );

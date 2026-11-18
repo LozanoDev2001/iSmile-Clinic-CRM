@@ -55,6 +55,16 @@ export const AUDIT_ACTIONS = {
   INVOICE_VOIDED: "invoice.voided",
   PAYMENT_RECORDED: "payment.recorded",
   PAYMENT_CORRECTED: "payment.corrected",
+  CLAIM_UPDATED: "claim.updated",
+  PAYMENT_PLAN_CREATED: "payment_plan.created",
+  PAYMENT_PLAN_CANCELLED: "payment_plan.cancelled",
+  INSTALLMENT_PAID: "installment.paid",
+  BANK_ACCOUNT_ADDED: "bank_account.added",
+  BANK_TRANSACTION_ADDED: "bank_transaction.added",
+  BANK_TRANSACTION_MATCHED: "bank_transaction.matched",
+  BANK_TRANSACTION_UNMATCHED: "bank_transaction.unmatched",
+  EXPENSE_RECORDED: "expense.recorded",
+  EXPENSE_DELETED: "expense.deleted",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

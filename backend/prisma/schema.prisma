@@ -281,6 +281,8 @@ model BankTransaction {
   amount           Decimal     @db.Decimal(12, 2)
   description      String?     @db.Text
   matchedPaymentId String?     @map("matched_payment_id") @db.Char(36)
+  reference        String?     @db.VarChar(80)
+  createdAt        DateTime    @default(now()) @map("created_at")
   bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id], onUpdate: Restrict, map: "bank_transactions_ibfk_1")
   matchedPayment   Payment?    @relation(fields: [matchedPaymentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "bank_transactions_ibfk_2")
 
@@ -299,6 +301,10 @@ model Claim {
   submittedAt    DateTime? @map("submitted_at")
   approvedAmount Decimal?  @map("approved_amount") @db.Decimal(12, 2)
   loaNo          String?   @map("loa_no") @db.VarChar(60)
+  paidAmount     Decimal?  @map("paid_amount") @db.Decimal(12, 2)
+  paidAt         DateTime? @map("paid_at")
+  paymentRef     String?   @map("payment_ref") @db.VarChar(80)
+  deniedReason   String?   @map("denied_reason") @db.VarChar(255)
   clinic         Clinic    @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "claims_ibfk_1")
   invoice        Invoice   @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "claims_ibfk_2")
   payer          Payer     @relation(fields: [payerId], references: [id], onUpdate: Restrict, map: "claims_ibfk_3")
@@ -306,6 +312,7 @@ model Claim {
   @@index([clinicId], map: "clinic_id")
   @@index([invoiceId], map: "invoice_id")
   @@index([payerId], map: "payer_id")
+  @@index([clinicId, status], map: "claims_status_idx")
   @@map("claims")
 }
 
@@ -651,14 +658,18 @@ model PaymentAllocation {
 }
 
 model PaymentInstallment {
-  id     String      @id @default(uuid()) @db.Char(36)
-  planId String      @map("plan_id") @db.Char(36)
-  dueOn  DateTime    @map("due_on") @db.Date
-  amount Decimal     @db.Decimal(12, 2)
-  status String      @default("due") @db.VarChar(255)
-  plan   PaymentPlan @relation(fields: [planId], references: [id], onUpdate: Restrict, map: "payment_installments_ibfk_1")
+  id        String      @id @default(uuid()) @db.Char(36)
+  planId    String      @map("plan_id") @db.Char(36)
+  dueOn     DateTime    @map("due_on") @db.Date
+  amount    Decimal     @db.Decimal(12, 2)
+  status    String      @default("due") @db.VarChar(255)
+  paymentId String?     @map("payment_id") @db.Char(36)
+  paidAt    DateTime?   @map("paid_at")
+  plan      PaymentPlan @relation(fields: [planId], references: [id], onUpdate: Restrict, map: "payment_installments_ibfk_1")
+  payment   Payment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_installments_payment_fkey")
 
   @@index([planId], map: "plan_id")
+  @@index([paymentId], map: "installment_payment_id")
   @@map("payment_installments")
 }
 
@@ -681,20 +692,21 @@ model PaymentPlan {
 }
 
 model Payment {
-  id                 String              @id @default(uuid()) @db.Char(36)
-  clinicId           String              @map("clinic_id") @db.Char(36)
-  patientId          String?             @map("patient_id") @db.Char(36)
-  amount             Decimal             @db.Decimal(12, 2)
-  method             String              @db.VarChar(255)
-  reference          String?             @db.VarChar(255)
-  receivedAt         DateTime            @default(now()) @map("received_at")
-  status             String              @default("posted") @db.VarChar(255)
-  recordedById       String?             @map("recorded_by") @db.Char(36)
+  id                 String               @id @default(uuid()) @db.Char(36)
+  clinicId           String               @map("clinic_id") @db.Char(36)
+  patientId          String?              @map("patient_id") @db.Char(36)
+  amount             Decimal              @db.Decimal(12, 2)
+  method             String               @db.VarChar(255)
+  reference          String?              @db.VarChar(255)
+  receivedAt         DateTime             @default(now()) @map("received_at")
+  status             String               @default("posted") @db.VarChar(255)
+  recordedById       String?              @map("recorded_by") @db.Char(36)
   bankTransactions   BankTransaction[]
   paymentAllocations PaymentAllocation[]
-  clinic             Clinic              @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payments_ibfk_1")
-  patient            Patient?            @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_2")
-  recordedBy         User?               @relation(fields: [recordedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_3")
+  installments       PaymentInstallment[]
+  clinic             Clinic               @relation(fields: [clinicId], references: [id], onUpdate: Restrict, map: "payments_ibfk_1")
+  patient            Patient?             @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_2")
+  recordedBy         User?                @relation(fields: [recordedById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payments_ibfk_3")
 
   @@index([clinicId], map: "clinic_id")
   @@index([patientId], map: "patient_id")

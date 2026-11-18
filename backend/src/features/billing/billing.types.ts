@@ -101,6 +101,8 @@ export interface PendingVoid extends VoidRequest {
 export interface BillingOverview {
   collectedToday: number;
   collectedThisMonth: number;
+  /** Collected over the same days of last month, for the month-to-date comparison. */
+  collectedLastMonthToDate: number;
   unpaidBalance: number;
   hmoPending: number;
   unpaid: InvoiceSummary[];

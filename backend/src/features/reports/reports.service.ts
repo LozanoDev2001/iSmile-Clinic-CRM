@@ -157,25 +157,68 @@ export async function getSalesReport(user: AuthUser, rawQuery: unknown): Promise
   };
 }
 
+/** Lead activity types that record a phone call with the lead. */
+const CALL_ACTIVITIES = ["retry", "follow_up", "book_consult"] as const;
+/** Lead activity types that mean the clinic got through to the lead. */
+const REACHED_ACTIVITIES = ["follow_up", "book_consult", "plan_sent", "won"] as const;
+const FUNNEL_ACTIVITIES = ["assign", ...REACHED_ACTIVITIES] as const;
+const MS_PER_DAY = 86_400_000;
+const UNASSIGNED = "Unassigned";
+
+type ClosedLead = Awaited<ReturnType<typeof reportsRepository.leadsClosed>>[number];
+const wonValueOf = (leads: ClosedLead[]) => sum(leads.filter((l) => l.status === "won").map((l) => l.wonValue?.toNumber() ?? 0));
+
 export async function getLeadsReport(user: AuthUser, rawQuery: unknown): Promise<LeadsReport> {
   assertPermission(user, "reports.read");
   const month = monthQuerySchema.parse(rawQuery).month ?? clinicToday().slice(0, 7);
+  const previousMonth = addMonths(month, -1);
   const from = startOf(month);
   const to = startOf(addMonths(month, 1));
-  const [created, closed] = await Promise.all([reportsRepository.leadsCreated(user.clinicId, from, to), reportsRepository.leadsClosed(user.clinicId, from, to)]);
+  const previousFrom = startOf(previousMonth);
+  const [created, closed, calls, previousReceived, previousClosed] = await Promise.all([
+    reportsRepository.leadsCreated(user.clinicId, from, to, FUNNEL_ACTIVITIES),
+    reportsRepository.leadsClosed(user.clinicId, from, to),
+    reportsRepository.leadCalls(user.clinicId, from, to, CALL_ACTIVITIES),
+    reportsRepository.leadsCreatedCount(user.clinicId, previousFrom, from),
+    reportsRepository.leadsClosed(user.clinicId, previousFrom, from),
+  ]);
   const won = closed.filter((l) => l.status === "won");
   const lost = closed.filter((l) => l.status === "lost");
   const sourceOf = (l: { source: { name: string } | null }) => l.source?.name ?? UNKNOWN_SOURCE;
+  const staffOf = (l: { assignedTo: { fullName: string } | null }) => l.assignedTo?.fullName ?? UNASSIGNED;
+
+  const did = (l: (typeof created)[number], types: readonly string[]) => l.leadActivities.some((a) => types.includes(a.activityType));
+  const reached = created.filter((l) => l.status === "won" || did(l, REACHED_ACTIVITIES));
+  const assigned = created.filter((l) => l.assignedTo || did(l, FUNNEL_ACTIVITIES));
+  const consult = created.filter((l) => l.appointmentId || did(l, ["book_consult"]));
+  const daysToWin = won.flatMap((l) => (l.closedAt ? [(l.closedAt.getTime() - l.createdAt.getTime()) / MS_PER_DAY] : []));
 
   const sources = new Set([...created.map(sourceOf), ...closed.map(sourceOf)]);
-  const staff = new Set(closed.map((l) => l.assignedTo?.fullName ?? "Unassigned"));
+  const callers = calls.flatMap((c) => (c.actor ? [c.actor.fullName] : []));
+  const staff = new Set([...created.flatMap((l) => (l.assignedTo ? [l.assignedTo.fullName] : [])), ...closed.map(staffOf), ...callers]);
   return {
     month,
     received: created.length,
     won: won.length,
     lost: lost.length,
     winRate: closed.length ? round2((won.length / closed.length) * 100) : null,
-    wonValue: sum(won.map((l) => l.wonValue?.toNumber() ?? 0)),
+    wonValue: wonValueOf(closed),
+    previous: {
+      month: previousMonth,
+      received: previousReceived,
+      won: previousClosed.filter((l) => l.status === "won").length,
+      lost: previousClosed.filter((l) => l.status === "lost").length,
+      wonValue: wonValueOf(previousClosed),
+    },
+    stillOpen: created.filter((l) => l.status === "open").length,
+    avgDaysToWin: daysToWin.length ? round2(daysToWin.reduce((a, b) => a + b, 0) / daysToWin.length) : null,
+    funnel: [
+      { label: "Leads received", value: created.length },
+      { label: "Assigned to call", value: assigned.length },
+      { label: "Reached by phone", value: reached.length },
+      { label: "Consult booked", value: consult.length },
+      { label: "Won", value: created.filter((l) => l.status === "won").length },
+    ],
     bySource: [...sources]
       .map((source) => ({
         source,
@@ -185,11 +228,16 @@ export async function getLeadsReport(user: AuthUser, rawQuery: unknown): Promise
         value: sum(won.filter((l) => sourceOf(l) === source).map((l) => l.wonValue?.toNumber() ?? 0)),
       }))
       .sort((a, b) => b.received - a.received),
-    byStaff: [...staff].map((name) => ({
-      name,
-      won: won.filter((l) => (l.assignedTo?.fullName ?? "Unassigned") === name).length,
-      lost: lost.filter((l) => (l.assignedTo?.fullName ?? "Unassigned") === name).length,
-    })),
+    byStaff: [...staff]
+      .map((name) => ({
+        name,
+        assigned: created.filter((l) => l.assignedTo?.fullName === name).length,
+        calls: callers.filter((c) => c === name).length,
+        won: won.filter((l) => staffOf(l) === name).length,
+        lost: lost.filter((l) => staffOf(l) === name).length,
+        value: wonValueOf(closed.filter((l) => staffOf(l) === name)),
+      }))
+      .sort((a, b) => b.assigned - a.assigned || b.won - a.won),
     lostReasons: tally(lost, (l) => l.closedReason ?? "No reason given"),
   };
 }

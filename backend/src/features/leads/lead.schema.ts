@@ -79,7 +79,9 @@ export const boardQuerySchema = z.object({
   search: z.string().trim().max(100).optional().transform((v) => v || undefined),
 });
 
+export const ALL_MONTHS = "all";
+
 export const closedQuerySchema = z.object({
   status: z.enum(["won", "lost"]).catch("won"),
-  month: z.string().regex(/^\d{4}-\d{2}$/).optional().catch(undefined),
+  month: z.union([z.string().regex(/^\d{4}-\d{2}$/), z.literal(ALL_MONTHS)]).optional().catch(undefined),
 });

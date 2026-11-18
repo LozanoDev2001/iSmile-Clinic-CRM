@@ -16,12 +16,14 @@ interface InvoiceActionsProps {
   canPay: boolean;
   canCancel: boolean;
   canApprove: boolean;
+  /** Off where the page shows something other than the invoice document. */
+  showPrint?: boolean;
 }
 
 const panel = "glass-card flex flex-col gap-3 rounded-[24px] p-5 print:hidden";
 const secondary = "h-10 rounded-full border border-[#D5DCE5] bg-white px-4 text-sm disabled:opacity-50";
 
-export function InvoiceActions({ invoice: i, canPay, canCancel, canApprove }: InvoiceActionsProps) {
+export function InvoiceActions({ invoice: i, canPay, canCancel, canApprove, showPrint = true }: InvoiceActionsProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [payment, setPayment] = useState<PaymentDraft>(() => emptyPayment(i.balance));
@@ -45,10 +47,12 @@ export function InvoiceActions({ invoice: i, canPay, canCancel, canApprove }: In
 
   return (
     <div className="flex flex-col gap-4">
-      <button type="button" onClick={() => window.print()} className={`${secondary} inline-flex items-center justify-center gap-2 print:hidden`}>
-        <Printer className="size-4" aria-hidden />
-        Print or save as PDF
-      </button>
+      {showPrint ? (
+        <button type="button" onClick={() => window.print()} className={`${secondary} inline-flex items-center justify-center gap-2 print:hidden`}>
+          <Printer className="size-4" aria-hidden />
+          Print or save as PDF
+        </button>
+      ) : null}
 
       {active && canPay && i.balance > 0 ? (
         <section aria-label="Record payment" className={panel}>

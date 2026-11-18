@@ -8,9 +8,9 @@ import { assertPermission, type AuthUser } from "@backend/lib/authorization";
 import { Errors } from "@backend/lib/errors/app-error";
 import { AUDIT_ACTIONS, audit } from "@backend/lib/logging/audit";
 import { prisma, type TransactionClient } from "@backend/lib/prisma";
-import { LEAD_STAGES, boardQuerySchema, closedQuerySchema, createLeadSchema, leadActionSchema, leadIdSchema } from "./lead.schema";
+import { ALL_MONTHS, LEAD_STAGES, boardQuerySchema, closedQuerySchema, createLeadSchema, leadActionSchema, leadIdSchema } from "./lead.schema";
 import { leadsRepository, toCard, type LeadDetailRow } from "./leads.repository";
-import type { ClosedLeads, CreateLeadInput, LeadActionInput, LeadBoard, LeadCard, LeadDetail, LeadOptions, LeadStage } from "./leads.types";
+import type { ClosedLeads, CreateLeadInput, LeadActionInput, LeadBoard, LeadCard, LeadCounts, LeadDetail, LeadOptions, LeadStage, LeadStatus, Tally } from "./leads.types";
 
 const HOUR_MS = 3_600_000;
 /** How soon a new lead should be called once someone is assigned. */
@@ -80,19 +80,44 @@ export async function getLeadBoard(user: AuthUser, rawQuery: unknown): Promise<L
   };
 }
 
+/** How many leads the clinic has in each status, for the tab badges. */
+export async function getLeadCounts(user: AuthUser): Promise<LeadCounts> {
+  assertPermission(user, "leads.read");
+  const rows = await leadsRepository.statusCounts(user.clinicId);
+  const counts: LeadCounts = { open: 0, won: 0, lost: 0 };
+  for (const r of rows) if (r.status in counts) counts[r.status as LeadStatus] = r._count;
+  return counts;
+}
+
+const OTHER_STATUS = { won: "lost", lost: "won" } as const;
+const MS_PER_DAY = 86_400_000;
+
+/** Counts each value, most common first. */
+function tally(values: (string | null | undefined)[]): Tally[] {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+}
+
 export async function getClosedLeads(user: AuthUser, rawQuery: unknown): Promise<ClosedLeads> {
   assertPermission(user, "leads.read");
   const { status, month = clinicToday().slice(0, 7) } = closedQuerySchema.parse(rawQuery);
   const start = `${month}-01`;
-  const next = `${addDays(start, 31).slice(0, 7)}-01`;
-  const leads = await leadsRepository.closedLeads(user.clinicId, status, clinicInstant(start), clinicInstant(next));
-  const counts = new Map<string, number>();
-  for (const l of leads) if (l.closedReason) counts.set(l.closedReason, (counts.get(l.closedReason) ?? 0) + 1);
+  const range = month === ALL_MONTHS ? undefined : { from: clinicInstant(start), to: clinicInstant(`${addDays(start, 31).slice(0, 7)}-01`) };
+  const [leads, otherTotal] = await Promise.all([
+    leadsRepository.closedLeads(user.clinicId, status, range),
+    leadsRepository.closedCount(user.clinicId, OTHER_STATUS[status], range),
+  ]);
+  const winDays = status === "won" ? leads.flatMap((l) => (l.closedAt ? [(l.closedAt.getTime() - l.createdAt.getTime()) / MS_PER_DAY] : [])) : [];
   return {
     leads,
     total: leads.length,
+    otherTotal,
     value: leads.reduce((sum, l) => sum + (l.wonValue ?? 0), 0),
-    reasons: [...counts].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    avgDaysToWin: winDays.length ? Math.round(winDays.reduce((a, b) => a + b, 0) / winDays.length) : null,
+    reasons: tally(leads.map((l) => l.closedReason)),
+    stages: tally(leads.map((l) => l.stage)),
+    sources: tally(leads.map((l) => l.source?.name)),
   };
 }
 
@@ -102,7 +127,6 @@ function toDetail(row: LeadDetailRow): LeadDetail {
     contactId: row.contactId,
     email: row.contact.email,
     preferredChannel: row.contact.preferredChannel,
-    message: row.message,
     patient: row.convertedPatient,
     appointment: row.appointment,
     activities: row.leadActivities.map((a) => ({ id: a.id, type: a.activityType, content: a.content, actorName: a.actor?.fullName ?? null, occurredAt: a.occurredAt })),
@@ -152,7 +176,7 @@ export async function createLead(user: AuthUser, input: CreateLeadInput): Promis
 }
 
 /** The patient behind a lead: the contact's existing patient record, or a new one numbered like any other. */
-async function patientForLead(user: AuthUser, lead: LeadDetailRow, dentistId: string, tx: TransactionClient): Promise<string> {
+async function patientForLead(user: AuthUser, lead: LeadDetailRow, dentistId: string | null, tx: TransactionClient): Promise<string> {
   if (lead.convertedPatient) return lead.convertedPatient.id;
   const existing = await tx.patient.findUnique({ where: { contactId: lead.contactId }, select: { id: true } });
   if (existing) return existing.id;
@@ -182,7 +206,7 @@ export async function updateLead(user: AuthUser, rawId: unknown, input: LeadActi
     const lead = await leadsRepository.findDetail(user.clinicId, id, tx);
     if (!lead) throw Errors.notFound("lead");
     if (action.type === "reopen" ? lead.status !== "lost" : action.type !== "note" && lead.status !== "open") {
-      throw Errors.conflict(action.type === "reopen" ? "Only lost leads can be reopened." : "This lead is closed. Reopen it first.");
+      throw Errors.conflict(action.type === "reopen" ? "Only terminated leads can be reopened." : "This lead is closed. Reopen it first.");
     }
     if (action.type !== "note") await assertAssignable(user.clinicId, action.assigneeId, tx);
     if ("nextAt" in action) assertNotLongPast(action.nextAt);
@@ -222,13 +246,14 @@ export async function updateLead(user: AuthUser, rawId: unknown, input: LeadActi
       }
       case "won": {
         const service = await servicePrice(user.clinicId, action.serviceId, tx);
-        data = { ...base, status: "won", interestedServiceId: action.serviceId, wonValue: service.price, closedAt: new Date(), closedReason: null, nextActionAt: null };
+        const patientId = await patientForLead(user, lead, null, tx);
+        data = { ...base, status: "won", interestedServiceId: action.serviceId, wonValue: service.price, closedAt: new Date(), closedReason: null, nextActionAt: null, convertedPatientId: patientId, convertedAt: lead.convertedPatient ? undefined : new Date() };
         text = `Won · ${service.name}`;
         break;
       }
       case "lost":
         data = { ...base, status: "lost", closedAt: new Date(), closedReason: action.reason, nextActionAt: null };
-        text = `Lost · ${action.reason}`;
+        text = `Terminated · ${action.reason}`;
         break;
       case "reopen":
         data = { ...base, status: "open", stage: "assigned", closedAt: null, closedReason: null, wonValue: null, nextActionAt: action.nextAt };

@@ -25,10 +25,10 @@ export const DISCOUNT_LABELS: Record<DiscountType, string> = {
 };
 
 export const STATUS_META: Record<InvoiceStatus, { label: string; className: string }> = {
-  issued: { label: "Unpaid", className: "bg-[#FDECEA] text-[#B42318]" },
-  part_paid: { label: "Partially paid", className: "bg-[#FEF1DF] text-[#A55A00]" },
-  paid: { label: "Paid", className: "bg-[#E3F4EA] text-[#1F7A4D]" },
-  void: { label: "Cancelled", className: "bg-[#EEF1F5] text-[#5E6B7E] line-through" },
+  issued: { label: "Unpaid", className: "bg-[#F9B4AA] text-[#5A1308]" },
+  part_paid: { label: "Partially paid", className: "bg-[#FDE3BD] text-[#5A3500]" },
+  paid: { label: "Paid", className: "bg-[#9EDBC0] text-[#0B3D26]" },
+  void: { label: "Cancelled", className: "bg-[#EEF1F5] text-[#46566B] line-through" },
 };
 
 /** "Paid · HMO share pending" style label: the patient's side first, then the HMO's. */

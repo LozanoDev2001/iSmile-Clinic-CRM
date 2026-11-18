@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CalendarPlus, Pencil } from "lucide-react";
 import { Avatar } from "@/components/shared/avatar";
+import { InfoCard, StatTile } from "@/components/shared/info-card";
 import { Pill } from "@/components/shared/pill";
 import { clinicDateOf } from "@/config/clinic";
 import { cn } from "@/lib/utils";
@@ -21,28 +22,6 @@ function Field({ label, value, alert, wide }: { label: string; value: ReactNode;
     <div className={cn("flex min-w-0 flex-col gap-1", wide && "sm:col-span-2")}>
       <dt className="text-xs text-[#5E6B7E]">{label}</dt>
       <dd className={cn("text-[15px] break-words", !value ? "text-[#9AA6B6]" : alert ? "text-[#B42318]" : "text-[#0E2A47]")}>{value || "Not recorded yet"}</dd>
-    </div>
-  );
-}
-
-function Card({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
-  return (
-    <section aria-label={title} className="glass-card flex min-w-0 flex-col gap-3 rounded-[24px] p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        {aside}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Stat({ label, value, note, highlight }: { label: string; value: string; note: string; highlight?: boolean }) {
-  return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-[22px] px-4 py-3.5", highlight ? "bg-[#1D5296] text-white" : "glass-card text-[#0E2A47]")}>
-      <span className={cn("text-xs", highlight ? "text-[#CFE0F5]" : "text-[#5E6B7E]")}>{label}</span>
-      <span className="text-xl">{value}</span>
-      <span className={cn("truncate text-xs", highlight ? "text-[#CFE0F5]" : "text-[#5E6B7E]")}>{note}</span>
     </div>
   );
 }
@@ -114,7 +93,7 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
       </nav>
 
       {tab === "history" && p.visits ? (
-        <Card title="History of procedures" aside={<span className="text-xs text-[#5E6B7E]">Newest first</span>}>
+        <InfoCard title="History of procedures" aside={<span className="text-xs text-[#5E6B7E]">Newest first</span>}>
           {p.visits.length ? (
             <ul className="flex flex-col divide-y divide-[#EDF0F4]">
               {p.visits.map((v) => (
@@ -128,15 +107,15 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
           ) : (
             <p className="text-sm text-[#5E6B7E]">No procedures recorded yet. They appear here once visits are completed.</p>
           )}
-        </Card>
+        </InfoCard>
       ) : (
         <>
           <div className={cn("grid gap-3 sm:grid-cols-3", billing && "sm:grid-cols-2 xl:grid-cols-4")}>
-            <Stat highlight label="Visits on record" value={p.visits ? String(p.visits.length) : "—"} note={p.visits ? (p.visits.length ? `Since ${formatDay(p.visits[p.visits.length - 1].occurredAt)}` : "No visits yet") : "Needs visit history access"} />
-            <Stat label="Last visit" value={lastVisit ? formatDay(lastVisit.occurredAt) : "—"} note={lastVisit?.dentistName ?? "No visits yet"} />
-            <Stat label="Next appointment" value={next ? formatDateTime(next.startsAt) : "—"} note={next ? [next.serviceName, next.dentistName].filter(Boolean).join(" · ") || "Booked" : "Nothing booked yet"} />
+            <StatTile highlight label="Visits on record" value={p.visits ? String(p.visits.length) : "—"} note={p.visits ? (p.visits.length ? `Since ${formatDay(p.visits[p.visits.length - 1].occurredAt)}` : "No visits yet") : "Needs visit history access"} />
+            <StatTile label="Last visit" value={lastVisit ? formatDay(lastVisit.occurredAt) : "—"} note={lastVisit?.dentistName ?? "No visits yet"} />
+            <StatTile label="Next appointment" value={next ? formatDateTime(next.startsAt) : "—"} note={next ? [next.serviceName, next.dentistName].filter(Boolean).join(" · ") || "Booked" : "Nothing booked yet"} />
             {billing ? (
-              <Stat
+              <StatTile
                 highlight={billing.balance > 0}
                 label="Balance"
                 value={peso(billing.balance)}
@@ -147,7 +126,7 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
             <div className="flex min-w-0 flex-col gap-4">
-              <Card title="Basic information">
+              <InfoCard title="Basic information">
                 <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   <Field label="Full name" value={p.fullName} />
                   <Field label="Patient no." value={p.patientNo} />
@@ -162,9 +141,9 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
                   <Field label="Attending dentist" value={p.primaryDentist?.name} />
                   <Field label="Home address" value={p.address} wide />
                 </dl>
-              </Card>
+              </InfoCard>
 
-              <Card title={p.clinical ? "Clinical, coverage and emergency contact" : "Coverage and emergency contact"}>
+              <InfoCard title={p.clinical ? "Clinical, coverage and emergency contact" : "Coverage and emergency contact"}>
                 <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   {p.clinical ? (
                     <>
@@ -182,13 +161,13 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
                   />
                   <Field label={child ? "Guardian mobile" : "Emergency mobile"} value={p.emergencyContact?.phone} />
                 </dl>
-              </Card>
+              </InfoCard>
 
               {p.chart ? <DentalChart chart={p.chart} child={child} /> : null}
             </div>
 
             <div className="flex min-w-0 flex-col gap-4">
-              <Card title="Upcoming visits" aside={<span className="text-xs text-[#5E6B7E]">{p.upcoming.length}</span>}>
+              <InfoCard title="Upcoming visits" aside={<span className="text-xs text-[#5E6B7E]">{p.upcoming.length}</span>}>
                 {p.upcoming.length ? (
                   <ul className="flex flex-col gap-2.5">
                     {p.upcoming.map((a) => (
@@ -203,9 +182,9 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
                 ) : (
                   <p className="text-sm text-[#5E6B7E]">Nothing booked yet.</p>
                 )}
-              </Card>
+              </InfoCard>
               {p.visits ? (
-                <Card title="Recent procedures">
+                <InfoCard title="Recent procedures">
                   {p.visits.length ? (
                     <ul className="flex flex-col gap-2.5">
                       {p.visits.slice(0, RECENT_VISITS).map((v) => (
@@ -221,7 +200,7 @@ export function PatientFile({ patient: p, tab, tabHref, canEdit, canBook, billin
                   <Link href={tabHref("history")} className="text-xs text-[#1D5296] underline">
                     Full procedure history
                   </Link>
-                </Card>
+                </InfoCard>
               ) : null}
             </div>
           </div>

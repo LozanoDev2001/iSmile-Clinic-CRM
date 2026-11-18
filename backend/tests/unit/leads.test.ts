@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
     addActivity: vi.fn(),
     createPatientFromContact: vi.fn(),
     markContactAsPatient: vi.fn(),
+    closedLeads: vi.fn(),
+    closedCount: vi.fn(),
   },
   catalog: { findActive: vi.fn() },
   patients: { maxPatientNumber: vi.fn() },
@@ -37,7 +39,7 @@ vi.mock("@backend/lib/logging/audit", async (importOriginal) => ({
 }));
 vi.mock("@backend/lib/prisma", () => ({ prisma: { $transaction: (fn: (tx: unknown) => unknown) => fn({ patient: { findUnique: mocks.findPatientByContact } }) } }));
 
-const { createLead, updateLead } = await import("@backend/features/leads/leads.service");
+const { createLead, getClosedLeads, updateLead } = await import("@backend/features/leads/leads.service");
 
 const LEAD_ID = "00000000-0000-4000-8000-c00000000001";
 const CONTACT_ID = "00000000-0000-4000-8000-c00000000002";
@@ -138,6 +140,19 @@ describe("updateLead", () => {
     expect(mocks.leads.addActivity.mock.calls[0][0].content).toContain("Call attempt 3 · no answer");
   });
 
+  it("adds a won lead to Patients when no consult was booked", async () => {
+    await updateLead(frontDesk, LEAD_ID, { type: "won", assigneeId: FRONT_DESK_ID, serviceId: SERVICE_ID });
+    expect(mocks.leads.createPatientFromContact).toHaveBeenCalledWith(expect.objectContaining({ contactId: CONTACT_ID, patientNo: "P-0008", primaryDentistId: null }), expect.anything());
+    expect(mocks.leads.update).toHaveBeenCalledWith(LEAD_ID, expect.objectContaining({ status: "won", convertedPatientId: "new-patient" }), expect.anything());
+  });
+
+  it("keeps the existing patient when a won lead already converted", async () => {
+    mocks.leads.findDetail.mockResolvedValue(leadRow({ convertedPatient: { id: "p1", patientNo: "P-0001" } }));
+    await updateLead(frontDesk, LEAD_ID, { type: "won", assigneeId: FRONT_DESK_ID, serviceId: SERVICE_ID });
+    expect(mocks.leads.createPatientFromContact).not.toHaveBeenCalled();
+    expect(mocks.leads.update).toHaveBeenCalledWith(LEAD_ID, expect.objectContaining({ convertedPatientId: "p1", convertedAt: undefined }), expect.anything());
+  });
+
   it("values a won lead at the accepted treatment's price", async () => {
     await updateLead(frontDesk, LEAD_ID, { type: "won", assigneeId: FRONT_DESK_ID, serviceId: SERVICE_ID });
     expect(mocks.leads.update).toHaveBeenCalledWith(LEAD_ID, expect.objectContaining({ status: "won", wonValue: 5000, interestedServiceId: SERVICE_ID }), expect.anything());
@@ -174,5 +189,28 @@ describe("updateLead", () => {
     await updateLead(frontDesk, LEAD_ID, { type: "note", note: "Asked about HMO coverage" });
     expect(mocks.leads.update).not.toHaveBeenCalled();
     expect(mocks.leads.addActivity).toHaveBeenCalledWith(expect.objectContaining({ activityType: "note", content: "Asked about HMO coverage" }), expect.anything());
+  });
+});
+
+describe("getClosedLeads", () => {
+  const card = (patch: Record<string, unknown>) => ({ stage: "follow_up", closedReason: null, wonValue: null, source: { id: "s1", name: "TikTok" }, createdAt: new Date("2026-10-01T00:00:00Z"), closedAt: new Date("2026-10-05T00:00:00Z"), ...patch });
+
+  it("sums up terminated leads by reason, stage and platform", async () => {
+    mocks.leads.closedLeads.mockResolvedValue([card({ closedReason: "Price or budget" }), card({ closedReason: "Price or budget", stage: "assigned" }), card({ closedReason: "Chose another clinic", source: null })]);
+    mocks.leads.closedCount.mockResolvedValue(1);
+    const r = await getClosedLeads(frontDesk, { status: "lost", month: "2026-10" });
+    expect(mocks.leads.closedCount).toHaveBeenCalledWith(CLINIC_A, "won", expect.objectContaining({ from: expect.any(Date) }));
+    expect(r).toMatchObject({ total: 3, otherTotal: 1, avgDaysToWin: null });
+    expect(r.reasons).toEqual([{ label: "Price or budget", count: 2 }, { label: "Chose another clinic", count: 1 }]);
+    expect(r.stages[0]).toEqual({ label: "follow_up", count: 2 });
+    expect(r.sources).toEqual([{ label: "TikTok", count: 2 }]);
+  });
+
+  it("covers every month and averages the days to win", async () => {
+    mocks.leads.closedLeads.mockResolvedValue([card({ wonValue: 5000 }), card({ wonValue: 15000, closedAt: new Date("2026-10-07T00:00:00Z") })]);
+    mocks.leads.closedCount.mockResolvedValue(0);
+    const r = await getClosedLeads(frontDesk, { status: "won", month: "all" });
+    expect(mocks.leads.closedLeads).toHaveBeenCalledWith(CLINIC_A, "won", undefined);
+    expect(r).toMatchObject({ total: 2, value: 20000, avgDaysToWin: 5 });
   });
 });

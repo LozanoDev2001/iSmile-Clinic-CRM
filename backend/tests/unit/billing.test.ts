@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     maxInvoiceNumber: vi.fn(),
     createInvoice: vi.fn(),
     createClaim: vi.fn(),
-    createPayment: vi.fn(),
+    createPayment: vi.fn(async () => ({ id: "payment-1" })),
     activeForAppointment: vi.fn(),
     findEncounter: vi.fn(),
     recordTreatments: vi.fn(),

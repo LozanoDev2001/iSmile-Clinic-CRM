@@ -131,7 +131,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
               <section aria-label="Leads" className="flex flex-col gap-1.5">
                 <h3 className="text-sm text-[#46566B]">Leads</h3>
                 {contact.leads.map((l) => {
-                  const status = l.status === "open" ? (STAGE_META[l.stage as LeadStage]?.label ?? l.stage) : l.status === "won" ? "Won" : "Lost";
+                  const status = l.status === "open" ? (STAGE_META[l.stage as LeadStage]?.label ?? l.stage) : l.status === "won" ? "Won" : "Terminated";
                   return can(user, "leads.read") ? (
                     <Link key={l.id} href={`/leads?lead=${l.id}`} className="text-sm text-[#1D5296] underline">
                       {status}

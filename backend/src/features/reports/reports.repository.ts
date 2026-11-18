@@ -42,14 +42,34 @@ export const reportsRepository = {
     return prisma.appointment.findMany({ where: { clinicId, startsAt: { gte: from, lt: to } }, select: { status: true, bookingSource: true } });
   },
 
-  leadsCreated(clinicId: string, from: Date, to: Date) {
-    return prisma.lead.findMany({ where: { clinicId, createdAt: { gte: from, lt: to } }, select: { source: { select: { name: true } } } });
+  leadsCreated(clinicId: string, from: Date, to: Date, activityTypes: readonly string[]) {
+    return prisma.lead.findMany({
+      where: { clinicId, createdAt: { gte: from, lt: to } },
+      select: {
+        status: true,
+        appointmentId: true,
+        source: { select: { name: true } },
+        assignedTo: { select: { fullName: true } },
+        leadActivities: { where: { activityType: { in: [...activityTypes] } }, select: { activityType: true } },
+      },
+    });
+  },
+
+  leadsCreatedCount(clinicId: string, from: Date, to: Date) {
+    return prisma.lead.count({ where: { clinicId, createdAt: { gte: from, lt: to } } });
   },
 
   leadsClosed(clinicId: string, from: Date, to: Date) {
     return prisma.lead.findMany({
       where: { clinicId, status: { in: ["won", "lost"] }, closedAt: { gte: from, lt: to } },
-      select: { status: true, wonValue: true, closedReason: true, source: { select: { name: true } }, assignedTo: { select: { fullName: true } } },
+      select: { status: true, wonValue: true, closedReason: true, createdAt: true, closedAt: true, source: { select: { name: true } }, assignedTo: { select: { fullName: true } } },
+    });
+  },
+
+  leadCalls(clinicId: string, from: Date, to: Date, activityTypes: readonly string[]) {
+    return prisma.leadActivity.findMany({
+      where: { activityType: { in: [...activityTypes] }, occurredAt: { gte: from, lt: to }, lead: { clinicId } },
+      select: { actor: { select: { fullName: true } } },
     });
   },
 };

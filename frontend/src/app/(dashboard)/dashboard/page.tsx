@@ -100,7 +100,7 @@ const REPORTS = [
   {
     group: "Growth",
     title: "Leads and new patients",
-    desc: "Leads by platform, how many were won, and why others were lost.",
+    desc: "Leads by platform, how many were won, and why others were terminated.",
     href: "/leads",
     cta: "Open in Leads",
   },

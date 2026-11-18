@@ -1,4 +1,5 @@
 import "server-only";
+import type { z } from "zod";
 import { addDays, ageFrom, clinicInstant, clinicToday } from "@backend/config/clinic";
 import { appointmentIdSchema } from "@backend/features/appointments/appointment.schema";
 import { appointmentsRepository } from "@backend/features/appointments/appointments.repository";
@@ -222,26 +223,34 @@ export async function recordPayment(user: AuthUser, rawId: unknown, input: Payme
   assertPermission(user, "billing.update");
   const id = invoiceIdSchema.parse(rawId);
   const payment = paymentInputSchema.parse(input);
-  return prisma.$transaction(async (tx) => {
-    await billingRepository.lock(id, tx);
-    const row = await billingRepository.findSummary(user.clinicId, id, tx);
-    if (!row) throw Errors.notFound("invoice");
-    const invoice = toSummary(row);
-    if (invoice.status === "void") throw Errors.conflict("This invoice is cancelled.");
-    if (payment.amount > invoice.balance) throw Errors.validation({ amount: [`The balance is ${invoice.balance.toFixed(2)}; take that amount or less.`] });
-    await billingRepository.createPayment(
-      { clinicId: user.clinicId, patientId: invoice.patient.id, invoiceId: id, amount: payment.amount, method: payment.method as PaymentMethod, reference: payment.reference, recordedById: user.id },
-      tx,
-    );
-    const paid = round2(invoice.paid + payment.amount);
-    const status = statusFor(invoice.patientDue, paid);
-    await billingRepository.setStatus(id, status, tx);
-    await audit(
-      { action: AUDIT_ACTIONS.PAYMENT_RECORDED, resourceType: "invoice", resourceId: id, actorId: user.id, clinicId: user.clinicId, metadata: { amount: payment.amount, method: payment.method } },
-      tx,
-    );
-    return { ...invoice, paid, balance: round2(invoice.patientDue - paid), status };
-  });
+  return prisma.$transaction(async (tx) => (await recordPaymentInTransaction(user, id, payment, tx)).invoice);
+}
+
+/** Takes a validated payment on a locked invoice inside the caller's transaction; returns the updated invoice and the payment id. */
+export async function recordPaymentInTransaction(
+  user: AuthUser,
+  id: string,
+  payment: z.output<typeof paymentInputSchema>,
+  tx: TransactionClient,
+): Promise<{ invoice: InvoiceSummary; paymentId: string }> {
+  await billingRepository.lock(id, tx);
+  const row = await billingRepository.findSummary(user.clinicId, id, tx);
+  if (!row) throw Errors.notFound("invoice");
+  const invoice = toSummary(row);
+  if (invoice.status === "void") throw Errors.conflict("This invoice is cancelled.");
+  if (payment.amount > invoice.balance) throw Errors.validation({ amount: [`The balance is ${invoice.balance.toFixed(2)}; take that amount or less.`] });
+  const created = await billingRepository.createPayment(
+    { clinicId: user.clinicId, patientId: invoice.patient.id, invoiceId: id, amount: payment.amount, method: payment.method as PaymentMethod, reference: payment.reference, recordedById: user.id },
+    tx,
+  );
+  const paid = round2(invoice.paid + payment.amount);
+  const status = statusFor(invoice.patientDue, paid);
+  await billingRepository.setStatus(id, status, tx);
+  await audit(
+    { action: AUDIT_ACTIONS.PAYMENT_RECORDED, resourceType: "invoice", resourceId: id, actorId: user.id, clinicId: user.clinicId, metadata: { amount: payment.amount, method: payment.method } },
+    tx,
+  );
+  return { invoice: { ...invoice, paid, balance: round2(invoice.patientDue - paid), status }, paymentId: created.id };
 }
 
 /** Approvers cancel straight away; everyone else with billing access sends a request. */
@@ -294,9 +303,14 @@ export async function getBillingOverview(user: AuthUser): Promise<BillingOvervie
   assertPermission(user, "billing.read");
   const today = clinicToday();
   const monthStart = `${today.slice(0, 7)}-01`;
-  const [collectedToday, collectedThisMonth, unpaid, hmoPending, payments, voids] = await Promise.all([
+  const lastMonthEnd = addDays(monthStart, -1);
+  const lastMonthStart = `${lastMonthEnd.slice(0, 7)}-01`;
+  const sameDayLastMonth = `${lastMonthStart.slice(0, 8)}${today.slice(8)}`;
+  const lastMonthTo = sameDayLastMonth < lastMonthEnd ? sameDayLastMonth : lastMonthEnd;
+  const [collectedToday, collectedThisMonth, collectedLastMonthToDate, unpaid, hmoPending, payments, voids] = await Promise.all([
     billingRepository.collected(user.clinicId, clinicInstant(today), clinicInstant(addDays(today, 1))),
     billingRepository.collected(user.clinicId, clinicInstant(monthStart), clinicInstant(addDays(today, 1))),
+    billingRepository.collected(user.clinicId, clinicInstant(lastMonthStart), clinicInstant(addDays(lastMonthTo, 1))),
     billingRepository.unpaid(user.clinicId),
     billingRepository.hmoPending(user.clinicId),
     billingRepository.latestPayments(user.clinicId),
@@ -305,6 +319,7 @@ export async function getBillingOverview(user: AuthUser): Promise<BillingOvervie
   return {
     collectedToday,
     collectedThisMonth,
+    collectedLastMonthToDate,
     unpaidBalance: round2(unpaid.reduce((s, i) => s + i.balance, 0)),
     hmoPending,
     unpaid,

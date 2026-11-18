@@ -77,7 +77,23 @@ export interface LeadsReport {
   /** Won ÷ (won + lost); null when nothing closed. */
   winRate: number | null;
   wonValue: number;
+  previous: { month: string; received: number; won: number; lost: number; wonValue: number };
+  /** Leads received this month that are still open. */
+  stillOpen: number;
+  /** Average days from enquiry to won, for leads won this month; null when none. */
+  avgDaysToWin: number | null;
   bySource: LeadsSourceRow[];
-  byStaff: { name: string; won: number; lost: number }[];
+  byStaff: LeadsStaffRow[];
   lostReasons: Bar[];
+  /** How far this month's leads have got: received, assigned, reached, consult booked, won. */
+  funnel: Bar[];
+}
+
+export interface LeadsStaffRow {
+  name: string;
+  assigned: number;
+  calls: number;
+  won: number;
+  lost: number;
+  value: number;
 }

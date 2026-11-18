@@ -3,14 +3,20 @@ import type { Prisma } from "@backend/generated/prisma/client";
 import { prisma, type TransactionClient } from "@backend/lib/prisma";
 import type { LeadCard, LeadStage, LeadStatus } from "./leads.types";
 
+type ClosedStatus = Exclude<LeadStatus, "open">;
+type DateRange = { from: Date; to: Date };
+
 const ACTIVITY_LIMIT = 50;
-const CLOSED_LIMIT = 200;
+const CLOSED_LIMIT = 1000;
+
+const closedWhere = (clinicId: string, status: ClosedStatus, range?: DateRange) => ({ clinicId, status, closedAt: range && { gte: range.from, lt: range.to } });
 
 const cardSelect = {
   id: true,
   stage: true,
   status: true,
   hot: true,
+  message: true,
   nextActionAt: true,
   attempts: true,
   createdAt: true,
@@ -33,6 +39,7 @@ export function toCard(row: CardRow): LeadCard {
     stage: row.stage as LeadStage,
     status: row.status as LeadStatus,
     hot: row.hot,
+    message: row.message,
     source: row.source,
     interest: row.interestedService,
     assignee: row.assignedTo && { id: row.assignedTo.id, name: row.assignedTo.fullName },
@@ -48,7 +55,6 @@ export function toCard(row: CardRow): LeadCard {
 const detailSelect = {
   ...cardSelect,
   contactId: true,
-  message: true,
   contact: { select: { fullName: true, phone: true, email: true, preferredChannel: true } },
   convertedPatient: { select: { id: true, patientNo: true } },
   appointment: { select: { id: true, startsAt: true, status: true } },
@@ -76,14 +82,22 @@ export const leadsRepository = {
     return rows.map(toCard);
   },
 
-  async closedLeads(clinicId: string, status: Exclude<LeadStatus, "open">, from: Date, to: Date) {
+  closedCount(clinicId: string, status: ClosedStatus, range?: DateRange) {
+    return prisma.lead.count({ where: closedWhere(clinicId, status, range) });
+  },
+
+  async closedLeads(clinicId: string, status: ClosedStatus, range?: DateRange) {
     const rows = await prisma.lead.findMany({
-      where: { clinicId, status, closedAt: { gte: from, lt: to } },
+      where: closedWhere(clinicId, status, range),
       select: cardSelect,
       orderBy: { closedAt: "desc" },
       take: CLOSED_LIMIT,
     });
     return rows.map(toCard);
+  },
+
+  statusCounts(clinicId: string) {
+    return prisma.lead.groupBy({ by: ["status"], where: { clinicId }, _count: true });
   },
 
   wonSince(clinicId: string, from: Date) {

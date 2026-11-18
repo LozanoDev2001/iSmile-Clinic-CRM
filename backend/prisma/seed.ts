@@ -52,53 +52,6 @@ async function seedPatients(clinicId: string) {
   }
 }
 
-// [code, name, price before VAT, kind, HMO can cover it]
-const PRICE_LIST: [string, string, number, "service" | "product", boolean][] = [
-  ["CONS", "Consultation and oral examination", 500, "service", true],
-  ["PROPH", "Oral prophylaxis (cleaning)", 1300, "service", true],
-  ["PCLN", "Pediatric oral prophylaxis", 1500, "service", true],
-  ["FLUO", "Fluoride varnish application", 800, "service", true],
-  ["SEAL", "Pit and fissure sealant", 700, "service", true],
-  ["FIL1", "Composite restoration, 1 surface", 1500, "service", true],
-  ["FIL2", "Composite restoration, 2 surfaces", 2200, "service", true],
-  ["EXT", "Simple extraction", 1200, "service", true],
-  ["SEXT", "Surgical extraction, impacted tooth", 9000, "service", false],
-  ["RCT", "Root canal treatment, molar", 14000, "service", false],
-  ["CRWN", "Porcelain-fused-to-metal crown", 14500, "service", false],
-  ["PA", "Periapical X-ray", 500, "service", true],
-  ["PANO", "Panoramic X-ray", 1500, "service", false],
-  ["EMER", "Emergency consultation", 1000, "service", true],
-  ["OCON", "Orthodontic consultation and records", 800, "service", false],
-  ["OADJ", "Orthodontic treatment, monthly adjustment", 3500, "service", false],
-  ["ALN", "Clear aligner treatment, monthly", 5000, "service", false],
-  ["RET", "Orthodontic retainer, per arch", 6500, "service", false],
-  ["WHT", "In-office teeth whitening", 12000, "service", false],
-  ["VEN", "Porcelain veneer, per unit", 15000, "service", false],
-  ["MED", "Prescribed medicine, pain relief", 450, "product", false],
-  ["MED2", "Prescribed medicine, antibiotic course", 1000, "product", false],
-  ["KIT", "Post-surgery aftercare kit", 560, "product", false],
-  ["BRUSH", "iSmile oral care kit", 280, "product", false],
-];
-
-// Usual visit length in minutes, used to book appointments.
-const DURATIONS: Record<string, number> = {
-  CONS: 30, PROPH: 60, PCLN: 60, FLUO: 30, SEAL: 30, FIL1: 60, FIL2: 60, EXT: 60, SEXT: 90, RCT: 90,
-  CRWN: 90, PA: 15, PANO: 15, EMER: 30, OCON: 60, OADJ: 30, ALN: 30, RET: 30, WHT: 90, VEN: 120,
-};
-
-async function seedPriceList(clinicId: string) {
-  if ((await prisma.service.count({ where: { clinicId } })) > 0) return;
-  await prisma.service.createMany({
-    data: PRICE_LIST.map(([code, name, price, kind, hmoCoverable]) => ({ clinicId, code, name, price, kind, hmoCoverable })),
-  });
-}
-
-async function seedDurations(clinicId: string) {
-  for (const [code, durationMinutes] of Object.entries(DURATIONS)) {
-    await prisma.service.updateMany({ where: { clinicId, code, durationMinutes: null }, data: { durationMinutes } });
-  }
-}
-
 /** Opening hours Mon–Sat 09:00–18:00 when the clinic profile has none yet. */
 async function seedClinicHours(clinicId: string) {
   const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId }, select: { settings: true } });
@@ -230,8 +183,6 @@ async function main() {
   });
 
   await seedPatients(clinic.id);
-  await seedPriceList(clinic.id);
-  await seedDurations(clinic.id);
   await seedClinicHours(clinic.id);
   await seedHmos(clinic.id);
   await seedStaff(clinic.id, passwordHash, roleIds);

@@ -14,6 +14,7 @@ export interface LeadCard {
   stage: LeadStage;
   status: LeadStatus;
   hot: boolean;
+  message: string | null;
   source: NamedRef | null;
   interest: NamedRef | null;
   assignee: NamedRef | null;
@@ -37,7 +38,6 @@ export interface LeadDetail extends LeadCard {
   contactId: string;
   email: string | null;
   preferredChannel: string | null;
-  message: string | null;
   patient: { id: string; patientNo: string } | null;
   appointment: { id: string; startsAt: Date; status: string } | null;
   activities: LeadActivityEntry[];
@@ -54,11 +54,23 @@ export interface LeadBoard {
   sources: (NamedRef & { open: number })[];
 }
 
+export type LeadCounts = Record<LeadStatus, number>;
+
+export interface Tally {
+  label: string;
+  count: number;
+}
+
 export interface ClosedLeads {
   leads: LeadCard[];
   total: number;
+  /** Leads closed the other way in the same period, for the share of closed leads. */
+  otherTotal: number;
   value: number;
-  reasons: { reason: string; count: number }[];
+  avgDaysToWin: number | null;
+  reasons: Tally[];
+  stages: Tally[];
+  sources: Tally[];
 }
 
 export interface LeadOptions {

@@ -25,7 +25,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
   book_consult: "Consult booked · book it on the calendar",
   plan_sent: "Plan sent · waiting on their decision",
   won: "Won · they accepted a treatment",
-  lost: "Lost",
+  lost: "Terminate · not going ahead",
   reopen: "Reopen this lead",
   note: "Just add a note",
 };
@@ -99,6 +99,12 @@ export function LeadPanel({ lead: l, options, userId, canUpdate, canBook, closeH
     dialogRef.current?.showModal();
   }, []);
 
+  const selectMove = (next: ActionType) => {
+    setType(next);
+    setChoice("");
+    setError("");
+  };
+
   const needsTime = type === "assign" || type === "retry" || type === "follow_up" || type === "plan_sent" || type === "reopen";
   const nextAt = () => (time ? clinicInstant(day, timeToMinutes(time)).toISOString() : "");
 
@@ -158,7 +164,7 @@ export function LeadPanel({ lead: l, options, userId, canUpdate, canBook, closeH
             <span className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl">{l.name}</h2>
               <span className={cn("rounded-full px-2 py-0.5 text-xs", l.status === "won" ? "bg-[#E3F4EA] text-[#1F7A4D]" : l.status === "lost" ? "bg-[#EEF1F5] text-[#5E6B7E]" : "bg-[#E4EEFB] text-[#1D5296]")}>
-                {l.status === "open" ? STAGE_META[l.stage].label : l.status === "won" ? "Won" : `Lost · ${l.closedReason}`}
+                {l.status === "open" ? STAGE_META[l.stage].label : l.status === "won" ? "Won" : `Terminated · ${l.closedReason}`}
               </span>
               {l.hot ? (
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FDECEA] px-1.5 text-[10px] font-semibold text-[#B42318]">
@@ -192,14 +198,17 @@ export function LeadPanel({ lead: l, options, userId, canUpdate, canBook, closeH
 
         {canUpdate ? (
           <section aria-label="Update this lead" className="glass-card flex flex-col gap-3 rounded-[22px] p-4">
-            <h3 className="text-base font-medium">Update this lead</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-medium">Update this lead</h3>
+              {moves.includes("lost") && type !== "lost" ? (
+                <button type="button" onClick={() => selectMove("lost")} className="h-9 rounded-full border border-[#F2C4BE] bg-white px-3 text-[13px] text-[#A1301F] hover:bg-[#FDECEA]">
+                  Terminate lead
+                </button>
+              ) : null}
+            </div>
             <label className={label}>
               Move this lead to
-              <select value={type} onChange={(e) => {
-                  setType(e.target.value as ActionType);
-                  setChoice("");
-                  setError("");
-                }} className={selectClass}>
+              <select value={type} onChange={(e) => selectMove(e.target.value as ActionType)} className={selectClass}>
                 {moves.map((m) => (
                   <option key={m} value={m}>
                     {ACTION_LABELS[m]}
@@ -230,7 +239,7 @@ export function LeadPanel({ lead: l, options, userId, canUpdate, canBook, closeH
                     </option>
                   ))}
                 </select>
-                <span className="text-xs text-[#5E6B7E]">This is call attempt {l.attempts + 1}{l.attempts + 1 >= 3 ? ". After 3 tries, consider marking it lost." : "."}</span>
+                <span className="text-xs text-[#5E6B7E]">This is call attempt {l.attempts + 1}{l.attempts + 1 >= 3 ? ". After 3 tries, consider terminating it." : "."}</span>
               </label>
             ) : null}
             {type === "follow_up" || type === "lost" ? (

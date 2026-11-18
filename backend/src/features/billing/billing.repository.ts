@@ -218,6 +218,8 @@ export const billingRepository = {
     // Money already taken is flagged for refund rather than deleted.
     await tx.payment.updateMany({ where: { paymentAllocations: { some: { invoiceId: id } }, status: POSTED }, data: { status: "refund_due" } });
     await tx.claim.updateMany({ where: { invoiceId: id }, data: { status: "cancelled" } });
+    await tx.paymentInstallment.updateMany({ where: { plan: { invoiceId: id, status: "active" }, status: "due" }, data: { status: "cancelled" } });
+    await tx.paymentPlan.updateMany({ where: { invoiceId: id, status: "active" }, data: { status: "cancelled" } });
   },
 
   pendingVoidRequest(invoiceId: string, tx: TransactionClient = prisma) {
@@ -247,7 +249,7 @@ export const billingRepository = {
   },
 
   async hmoPending(clinicId: string) {
-    const result = await prisma.claim.aggregate({ where: { clinicId, status: "submitted" }, _sum: { approvedAmount: true } });
+    const result = await prisma.claim.aggregate({ where: { clinicId, status: { in: ["submitted", "approved"] } }, _sum: { approvedAmount: true } });
     return result._sum.approvedAmount?.toNumber() ?? 0;
   },
 

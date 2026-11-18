@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Settings,
   SquareUser,
+  Stethoscope,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -69,6 +70,13 @@ export const NAV_MODULES: NavModule[] = [
     href: "/calendar",
     label: "Calendar",
     icon: CalendarDays,
+    permission: "appointments.read",
+  },
+  {
+    key: "dentists",
+    href: "/dentists",
+    label: "Dentists",
+    icon: Stethoscope,
     permission: "appointments.read",
   },
   {

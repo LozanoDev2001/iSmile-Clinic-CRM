@@ -3,7 +3,7 @@ import { Prisma } from "@backend/generated/prisma/client";
 import { makeUser } from "../helpers/fixtures";
 
 const mocks = vi.hoisted(() => ({
-  repo: { invoices: vi.fn(), payments: vi.fn(), newPatients: vi.fn(), appointments: vi.fn(), leadsCreated: vi.fn(), leadsClosed: vi.fn() },
+  repo: { invoices: vi.fn(), payments: vi.fn(), newPatients: vi.fn(), appointments: vi.fn(), leadsCreated: vi.fn(), leadsCreatedCount: vi.fn(), leadsClosed: vi.fn(), leadCalls: vi.fn() },
 }));
 vi.mock("@backend/features/reports/reports.repository", () => ({ reportsRepository: mocks.repo }));
 
@@ -40,6 +40,8 @@ beforeEach(() => {
   mocks.repo.appointments.mockResolvedValue([]);
   mocks.repo.leadsCreated.mockResolvedValue([]);
   mocks.repo.leadsClosed.mockResolvedValue([]);
+  mocks.repo.leadsCreatedCount.mockResolvedValue(0);
+  mocks.repo.leadCalls.mockResolvedValue([]);
 });
 
 describe("periods", () => {
@@ -100,17 +102,34 @@ describe("getSalesReport", () => {
 
 describe("getLeadsReport", () => {
   it("works out the win rate and value by platform", async () => {
-    mocks.repo.leadsCreated.mockResolvedValue([{ source: { name: "Facebook" } }, { source: { name: "Facebook" } }, { source: null }]);
-    mocks.repo.leadsClosed.mockResolvedValue([
-      { status: "won", wonValue: d(15000), closedReason: null, source: { name: "Facebook" }, assignedTo: { fullName: "Joy Ramirez" } },
-      { status: "lost", wonValue: null, closedReason: "Price or budget", source: { name: "Facebook" }, assignedTo: { fullName: "Joy Ramirez" } },
-      { status: "lost", wonValue: null, closedReason: "Price or budget", source: null, assignedTo: null },
+    const joy = { fullName: "Joy Ramirez" };
+    mocks.repo.leadsCreated.mockResolvedValue([
+      { status: "won", appointmentId: "a1", source: { name: "Facebook" }, assignedTo: joy, leadActivities: [{ activityType: "assign" }, { activityType: "book_consult" }] },
+      { status: "open", appointmentId: null, source: { name: "Facebook" }, assignedTo: joy, leadActivities: [{ activityType: "assign" }] },
+      { status: "open", appointmentId: null, source: null, assignedTo: null, leadActivities: [] },
     ]);
+    const created = new Date("2026-11-02T00:00:00Z");
+    mocks.repo.leadsClosed.mockImplementation((_c: string, from: Date) =>
+      from < new Date("2026-10-15T00:00:00Z")
+        ? [{ status: "won", wonValue: d(5000), closedReason: null, createdAt: created, closedAt: created, source: null, assignedTo: null }]
+        : [
+            { status: "won", wonValue: d(15000), closedReason: null, createdAt: created, closedAt: new Date("2026-11-06T00:00:00Z"), source: { name: "Facebook" }, assignedTo: joy },
+            { status: "lost", wonValue: null, closedReason: "Price or budget", createdAt: created, closedAt: created, source: { name: "Facebook" }, assignedTo: joy },
+            { status: "lost", wonValue: null, closedReason: "Price or budget", createdAt: created, closedAt: created, source: null, assignedTo: null },
+          ],
+    );
+    mocks.repo.leadsCreatedCount.mockResolvedValue(2);
+    mocks.repo.leadCalls.mockResolvedValue([{ actor: joy }, { actor: joy }, { actor: null }]);
     const r = await getLeadsReport(owner, { month: "2026-11" });
-    expect(r).toMatchObject({ received: 3, won: 1, lost: 2, winRate: 33.33, wonValue: 15000 });
+    expect(r).toMatchObject({ received: 3, won: 1, lost: 2, winRate: 33.33, wonValue: 15000, stillOpen: 2, avgDaysToWin: 4 });
+    expect(r.previous).toEqual({ month: "2026-10", received: 2, won: 1, lost: 0, wonValue: 5000 });
     expect(r.bySource.find((s) => s.source === "Facebook")).toEqual({ source: "Facebook", received: 2, won: 1, lost: 1, value: 15000 });
-    expect(r.byStaff).toContainEqual({ name: "Unassigned", won: 0, lost: 1 });
+    expect(r.byStaff).toEqual([
+      { name: "Joy Ramirez", assigned: 2, calls: 2, won: 1, lost: 1, value: 15000 },
+      { name: "Unassigned", assigned: 0, calls: 0, won: 0, lost: 1, value: 0 },
+    ]);
     expect(r.lostReasons).toEqual([{ label: "Price or budget", value: 2 }]);
+    expect(r.funnel.map((f) => f.value)).toEqual([3, 2, 1, 1, 1]);
   });
 
   it("has no win rate when nothing closed", async () => {
