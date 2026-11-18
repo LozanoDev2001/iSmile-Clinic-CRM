@@ -77,7 +77,7 @@ export function MiniCalendar({ today }: MiniCalendarProps) {
       </div>
       <div className="flex flex-col gap-1.5 border-t border-[#EDF0F4] pt-2.5">
         <span className="text-xs text-[#5E6B7E]">{dayLabel.format(selected)}</span>
-        <span className="text-xs text-[#5E6B7E]">Appointments will appear here once the Calendar module is live.</span>
+        <span className="text-xs text-[#5E6B7E]">Nothing scheduled.</span>
       </div>
     </>
   );

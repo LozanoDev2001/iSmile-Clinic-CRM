@@ -15,13 +15,13 @@ interface StatCardProps {
 
 export function StatCard({ href, icon: Icon, chipClass, label, value, badge }: StatCardProps) {
   return (
-    <Link href={href} className="glass-card flex flex-col gap-2.5 rounded-[22px] p-4 transition-transform hover:-translate-y-0.5">
+    <Link href={href} className="glass-card flex min-w-0 flex-col gap-2.5 rounded-[22px] p-4 transition-transform hover:-translate-y-0.5 max-[720px]:rounded-[18px] max-[720px]:p-3">
       <span className={cn("grid size-[38px] place-items-center rounded-full", chipClass)}>
         <Icon className="size-[18px]" strokeWidth={1.8} aria-hidden />
       </span>
       <span className="text-[13px] text-[#46566B]">{label}</span>
       <span className="flex flex-wrap items-baseline gap-2">
-        <span className="text-[26px] leading-tight tabular-nums">{value}</span>
+        <span className="text-[26px] leading-tight whitespace-nowrap tabular-nums max-[720px]:text-[19px]">{value}</span>
         {badge}
       </span>
     </Link>
@@ -37,9 +37,9 @@ interface PanelProps {
 
 export function Panel({ title, action, className, children }: PanelProps) {
   return (
-    <section aria-label={title} className={cn("glass-card flex min-w-0 flex-col gap-3 rounded-[24px] px-5 py-[18px]", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-medium">{title}</h2>
+    <section aria-label={title} className={cn("glass-card flex min-w-0 flex-col gap-3 rounded-[22px] px-5 py-[18px] max-[720px]:rounded-[20px] max-[720px]:p-4", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <h2 className="text-lg font-medium max-[720px]:text-base">{title}</h2>
         {action}
       </div>
       {children}

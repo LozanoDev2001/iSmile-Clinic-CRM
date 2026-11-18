@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowUpRight,
-  ChartLine,
   Coins,
   Landmark,
   ShieldCheck,
@@ -10,6 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { MiniCalendar } from "@/features/dashboard/components/mini-calendar";
+import { RevenueChartPanel } from "@/features/dashboard/components/revenue-chart-panel";
 import { Avatar } from "@/components/shared/avatar";
 import { Pill } from "@/components/shared/pill";
 import { CLINIC_TIME_ZONE, CLINIC_UTC_OFFSET } from "@/config/clinic";
@@ -27,10 +27,10 @@ import { can, requirePageUser } from "@backend/lib/authorization";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-const CHART_MONTHS = 5;
 const TEAM_LIMIT = 5;
 
-const NO_DATA = "—";
+// Peso placeholder keeps empty values as wide as real amounts.
+const NO_DATA = "₱ —";
 
 function clinicNow() {
   const now = new Date();
@@ -65,18 +65,6 @@ function greeting(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-/** Short names of the last `count` months, oldest first, e.g. ["Jul", …, "Nov"]. */
-function recentMonths(isoDate: string, count: number) {
-  const [y, m] = isoDate.split("-").map(Number);
-  const fmt = new Intl.DateTimeFormat("en-GB", {
-    month: "short",
-    timeZone: "UTC",
-  });
-  return Array.from({ length: count }, (_, i) =>
-    fmt.format(new Date(Date.UTC(y, m - count + i, 1))),
-  );
 }
 
 const REPORTS = [
@@ -136,13 +124,13 @@ export default async function DashboardPage() {
     : user.name.split(" ")[0];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 max-[720px]:gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex min-w-0 flex-[1_1_380px] flex-col gap-1">
-          <h1 className="text-[28px] leading-tight font-normal tracking-[-0.01em] sm:text-[34px]">
+          <h1 className="text-[34px] leading-tight font-normal tracking-[-0.01em] max-[720px]:text-2xl">
             {greeting(hour)}, {displayName}
           </h1>
-          <p className="text-[13px] text-[#5E6B7E]">
+          <p className="text-[13px] text-[#5E6B7E] max-[720px]:text-xs">
             {longDate}
             {patientStats
               ? ` · ${patientStats.total.toLocaleString("en-PH")} patients on file`
@@ -160,9 +148,9 @@ export default async function DashboardPage() {
         ) : null}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] xl:items-start">
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+      <div className="flex flex-wrap items-stretch gap-4 max-[720px]:gap-3">
+        <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-4 max-[720px]:gap-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3 max-[720px]:grid-cols-2 max-[720px]:gap-2.5">
             {canBilling ? (
               <>
                 <StatCard
@@ -207,52 +195,14 @@ export default async function DashboardPage() {
             ) : null}
           </div>
 
-          {canBilling ? (
-            <Panel title="Revenue, expenses and profit">
-              <div className="relative h-[220px]">
-                <div
-                  className="absolute inset-x-0 top-0 bottom-[22px] flex flex-col justify-between"
-                  aria-hidden
-                >
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <span
-                      key={i}
-                      className="border-t border-dashed border-[#E3E8EF]"
-                    />
-                  ))}
-                </div>
-                <div
-                  className="absolute inset-x-0 bottom-0 flex justify-between px-1 text-[11px] text-[#5E6B7E]"
-                  aria-hidden
-                >
-                  {recentMonths(isoDate, CHART_MONTHS).map((m) => (
-                    <span key={m}>{m}</span>
-                  ))}
-                </div>
-                <div className="absolute inset-0 bottom-[22px] grid place-items-center px-4">
-                  <div className="flex max-w-sm flex-col items-center gap-2 rounded-2xl bg-white/80 px-5 py-4 text-center backdrop-blur-sm">
-                    <ChartLine
-                      className="size-6 text-[#1D5296]"
-                      strokeWidth={1.8}
-                      aria-hidden
-                    />
-                    <p className="text-[13px] text-[#46566B]">
-                      Monthly revenue, expenses and profit will chart here once
-                      invoices and expenses are recorded in Billing.
-                    </p>
-                    <TextLink href="/billing">Open Billing</TextLink>
-                  </div>
-                </div>
-              </div>
-            </Panel>
-          ) : null}
+          {canBilling ? <RevenueChartPanel isoDate={isoDate} /> : null}
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="flex grow flex-wrap items-stretch gap-4 max-[720px]:gap-3">
             {ownerView ? (
               <Panel
                 title="Approvals waiting"
-                action={<Pill tone="muted">0 waiting</Pill>}
-                className="gap-2.5"
+                action={<Pill tone="green">All clear</Pill>}
+                className="flex-[1_1_300px] gap-2.5 min-[721px]:min-h-[387px]"
               >
                 <p className="rounded-2xl bg-[#F4F6F9] px-3.5 py-4 text-[13px] text-[#5E6B7E]">
                   Nothing waiting for you. Discount, refund and cancellation
@@ -265,7 +215,7 @@ export default async function DashboardPage() {
               <Panel
                 title="Team"
                 action={<TextLink href="/settings/team">Manage team</TextLink>}
-                className="gap-2"
+                className="flex-[1_1_300px] gap-2 min-[721px]:min-h-[387px]"
               >
                 <ul className="flex flex-col">
                   {activeTeam.slice(0, TEAM_LIMIT).map((member) => (
@@ -297,7 +247,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <div className="flex max-w-full min-w-0 flex-[1_1_320px] flex-col gap-4 max-[720px]:gap-3">
           <Panel
             title="Your calendar"
             action={
@@ -305,7 +255,6 @@ export default async function DashboardPage() {
                 <TextLink href="/calendar">Clinic calendar</TextLink>
               ) : null
             }
-            className="md:row-span-2 xl:row-span-1"
           >
             <MiniCalendar today={isoDate} />
           </Panel>
@@ -313,7 +262,7 @@ export default async function DashboardPage() {
           {canBilling ? (
             <section
               aria-label="Cash position"
-              className="card-blue flex flex-col gap-3 rounded-[24px] px-5 py-[18px] text-white"
+              className="card-blue flex flex-col gap-3 rounded-[22px] px-5 py-[18px] text-white max-[720px]:rounded-[20px] max-[720px]:p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm text-[#D3E2F5]">Cash position</span>
@@ -323,7 +272,7 @@ export default async function DashboardPage() {
                   className="bg-[#2A64A8] text-white"
                 />
               </div>
-              <span className="text-[34px] leading-tight font-light tabular-nums">
+              <span className="text-[34px] leading-tight font-light tabular-nums max-[720px]:text-2xl">
                 {NO_DATA}
               </span>
               <span className="text-xs text-[#D3E2F5]">
@@ -349,7 +298,7 @@ export default async function DashboardPage() {
           {ownerView && can(user, "crwdforce.read") ? (
             <section
               aria-label="Mia this month"
-              className="card-amber flex flex-col gap-2 rounded-[24px] px-5 py-[18px] text-[#0E2A47]"
+              className="card-amber flex grow flex-col gap-2 rounded-[22px] px-5 py-[18px] text-[#0E2A47] max-[720px]:rounded-[20px] max-[720px]:p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm">Mia this month</span>
@@ -359,10 +308,10 @@ export default async function DashboardPage() {
                   className="bg-white text-[#0E2A47]"
                 />
               </div>
-              <span className="text-[30px] leading-tight">Not connected</span>
+              <span className="text-[30px] leading-tight max-[720px]:text-[21px]">Not connected</span>
               <span className="text-xs leading-normal">
-                Mia, the AI receptionist, will answer chats and calls and book
-                appointments. Her bookings and reply times will show here.
+                Bookings made by Mia, the AI receptionist, will show here
+                once she is connected.
               </span>
             </section>
           ) : null}
@@ -372,19 +321,19 @@ export default async function DashboardPage() {
       {ownerView && can(user, "reports.read") ? (
         <section aria-label="Owner reports" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-xl font-medium">Owner reports</h2>
+            <h2 className="text-xl font-medium max-[720px]:text-base">Owner reports</h2>
             <span className="text-xs text-[#5E6B7E]">
-              The reports that matter for running the clinic · available as each
-              module goes live
+              The reports that matter for running the clinic · preview, print or
+              download as PDF once each module is live
             </span>
           </div>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3 max-[720px]:grid-cols-1 max-[720px]:gap-2.5">
             {REPORTS.map((r) => (
               <Link
                 key={r.title}
                 href={r.href}
                 className={cn(
-                  "flex min-h-[140px] flex-col gap-2 rounded-[22px] p-4 transition-transform hover:-translate-y-0.5",
+                  "flex min-h-[140px] flex-col gap-2 rounded-[22px] p-4 transition-transform max-[720px]:min-h-0 max-[720px]:rounded-[18px] max-[720px]:p-3 hover:-translate-y-0.5",
                   r.dark ? "card-navy text-white" : "glass-card",
                 )}
               >
